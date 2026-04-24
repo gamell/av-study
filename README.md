@@ -60,14 +60,16 @@ Then open [http://localhost:3000](http://localhost:3000) in any browser. On firs
 
 ### Day-to-day commands
 
-| Command | What it does |
-|---------|--------------|
-| `docker compose up -d` | Start in background. |
-| `docker compose down` | Stop and remove the container (data in `./data` is preserved). |
-| `docker compose logs -f` | Tail logs. `Ctrl+C` to exit. |
-| `docker compose restart` | Restart without rebuilding (e.g. after editing `.env`). |
-| `docker compose ps` | See status + healthcheck result. |
-| `docker compose up -d --build` | Rebuild image and restart (use after pulling new code). |
+
+| Command                        | What it does                                                   |
+| ------------------------------ | -------------------------------------------------------------- |
+| `docker compose up -d`         | Start in background.                                           |
+| `docker compose down`          | Stop and remove the container (data in `./data` is preserved). |
+| `docker compose logs -f`       | Tail logs. `Ctrl+C` to exit.                                   |
+| `docker compose restart`       | Restart without rebuilding (e.g. after editing `.env`).        |
+| `docker compose ps`            | See status + healthcheck result.                               |
+| `docker compose up -d --build` | Rebuild image and restart (use after pulling new code).        |
+
 
 ### Updating to a new version
 
@@ -172,9 +174,32 @@ Generating cards / study texts and the in-card AI chat require network — those
 
 - Server SQLite stays the source of truth. The client keeps a mirror in IndexedDB via Dexie.
 - Page reads always hit IndexedDB → instant, offline-capable.
-- Writes (reviews, session updates, notes, card edits) are applied to IndexedDB immediately and appended to a durable queue; a small sync engine drains the queue against the existing `/api/*` endpoints when online.
+- Writes (reviews, session updates, notes, card edits) are applied to IndexedDB immediately and appended to a durable queue; a small sync engine drains the queue against the existing `/api/`* endpoints when online.
 - On boot / reconnect / tab focus / every 60 s, the client pulls a fresh `GET /api/sync/snapshot` and merges it into IndexedDB (rows with pending local ops are preserved until flush completes).
 - Two devices reviewing the same card offline simultaneously is safe: SM-2 is applied twice on the server, so both reviews count. All other entities fall back to last-write-wins by `updated_at`.
+
+## AI features & provider fallback
+
+The three online-only AI features — "Generate cards", "Generate study text", and in-card "AI chat" — run against whichever LLM providers you've configured. Every prompt is prefixed with a strict factuality directive that forbids inventing regulations, ACS codes, or handbook references and tells the model to hedge when uncertain (FAA-exam content has to be right).
+
+Configure **any one** of these keys to turn AI features on; configure more than one to get automatic fallback:
+
+- `ANTHROPIC_API_KEY` — Anthropic (primary `claude-opus-4-6` with adaptive thinking at `effort: "max"`, fallback `claude-opus-4-5-20251101`)
+- `OPENAI_API_KEY` — OpenAI (primary `gpt-5.5`, fallback `gpt-5.4`)
+- `GOOGLE_GENERATIVE_AI_API_KEY` — Google (primary `gemini-3.1-pro-preview`, fallback `gemini-2.5-pro`)
+
+### Priority chain
+
+Each provider has two model slots — primary and fallback — so the call falls through to a per-provider backup before ever crossing over to a different provider. If everything in one provider's pair fails, the next provider's pair is tried.
+
+1. Claude Opus 4.6 (max thinking)
+2. Claude Opus 4.5
+3. GPT-5.5
+4. GPT-5.4
+5. Gemini 3.1 Pro (preview)
+6. Gemini 2.5 Pro (stable)
+
+Set `LLM_PROVIDER=anthropic|openai|google` to move that provider's attempts to the front of the chain; the rest stay in as fallbacks. Every model id is env-overridable — `ANTHROPIC_MODEL` / `ANTHROPIC_MODEL_FALLBACK`, `OPENAI_MODEL` / `OPENAI_MODEL_FALLBACK`, `GOOGLE_MODEL` / `GOOGLE_MODEL_FALLBACK` — so a new release or deprecation never needs a code change.
 
 ## Tech Stack
 
@@ -183,7 +208,7 @@ Generating cards / study texts and the in-card AI chat require network — those
 - **Database**: SQLite (Drizzle ORM) server-side, IndexedDB (Dexie) client-side
 - **PWA**: Serwist service worker + web manifest
 - **UI**: Tailwind CSS v4, shadcn/ui components
-- **LLM**: Vercel AI SDK (OpenAI, Anthropic, Google Gemini) — online only
+- **LLM**: Vercel AI SDK with priority chain (Anthropic, OpenAI, Google Gemini) — online only
 
 ## Content Sources
 
@@ -197,25 +222,29 @@ Flashcard content is based on official FAA publications:
 
 ## Keyboard Shortcuts (Study Mode)
 
-| Key | Action |
-|-----|--------|
-| Space / Enter | Flip card |
-| 1 | Again (forgot) |
-| 2 | Hard |
-| 3 | Good |
-| 4 | Easy |
+
+| Key           | Action         |
+| ------------- | -------------- |
+| Space / Enter | Flip card      |
+| 1             | Again (forgot) |
+| 2             | Hard           |
+| 3             | Good           |
+| 4             | Easy           |
+
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `bun dev` | Dev server (Turbopack). PWA service worker is disabled in dev. |
-| `bun run build` | Production build (webpack). Generates `public/sw.js` + precache manifest. |
-| `bun start` | Start the production server. |
-| `bun run db:generate` | Generate a drizzle migration from schema changes. |
-| `bun run db:migrate` | Apply pending migrations. |
-| `bun run db:seed` | One-shot seed from the bundled JSON decks. |
-| `bun run icons:generate` | Regenerate PWA icons from `public/icons/*.svg`. |
+
+| Command                  | Description                                                               |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `bun dev`                | Dev server (Turbopack). PWA service worker is disabled in dev.            |
+| `bun run build`          | Production build (webpack). Generates `public/sw.js` + precache manifest. |
+| `bun start`              | Start the production server.                                              |
+| `bun run db:generate`    | Generate a drizzle migration from schema changes.                         |
+| `bun run db:migrate`     | Apply pending migrations.                                                 |
+| `bun run db:seed`        | One-shot seed from the bundled JSON decks.                                |
+| `bun run icons:generate` | Regenerate PWA icons from `public/icons/*.svg`.                           |
+
 
 ## License
 

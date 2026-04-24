@@ -11,16 +11,21 @@ services:
       - ./data:/app/data
     environment:
       NODE_ENV: production
-      # LLM provider selection. `openai` | `anthropic` | `google`. Leave unset
-      # and the generate/chat features simply error with a clear message when
-      # tapped; the offline flashcard flow does not require any of these.
+      # LLM starting provider. `anthropic` | `openai` | `google`. Unset = use
+      # the built-in priority chain (Anthropic Opus 4.6 -> GPT-5.5 -> GPT-5.4
+      # -> Gemini 3.1 Pro). Any provider whose API key is missing or whose
+      # call fails is automatically skipped; offline flashcards work without
+      # any of these set.
       LLM_PROVIDER: ${LLM_PROVIDER:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      ANTHROPIC_MODEL_FALLBACK: ${ANTHROPIC_MODEL_FALLBACK:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_MODEL_FALLBACK: ${OPENAI_MODEL_FALLBACK:-}
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
       GOOGLE_MODEL: ${GOOGLE_MODEL:-}
+      GOOGLE_MODEL_FALLBACK: ${GOOGLE_MODEL_FALLBACK:-}
     env_file:
       # Compose picks these up if present; missing file is ignored so first-run
       # without any secrets still works. Put your LLM keys here.

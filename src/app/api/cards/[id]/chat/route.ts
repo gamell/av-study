@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "ai";
-import { getModel, getProviderInfo } from "@/lib/llm";
+import {
+  FACTUALITY_DIRECTIVE,
+  NoLlmProviderError,
+  tryWithFallback,
+} from "@/lib/llm";
 import { db } from "@/lib/db";
 import { cards, cardNotes } from "@/lib/db/schema";
 import { eq, asc, and, inArray } from "drizzle-orm";
@@ -57,12 +61,17 @@ export async function POST(
     )
     .join("\n\n");
 
-  const model = getModel();
-  const { provider, model: modelName } = getProviderInfo();
+  let result;
+  let provider: string;
+  let modelName: string;
+  try {
+    const outcome = await tryWithFallback((model, providerOptions) =>
+      generateText({
+        model,
+        providerOptions,
+        prompt: `${FACTUALITY_DIRECTIVE}
 
-  const result = await generateText({
-    model,
-    prompt: `You are an experienced FAA-certified flight instructor helping a student pilot study for their private pilot certificate. You are discussing a specific flashcard.
+You are an experienced FAA-certified flight instructor helping a student pilot study for their private pilot certificate. You are discussing a specific flashcard.
 
 Flashcard context:
 - Question: ${card.question}
@@ -72,8 +81,19 @@ Flashcard context:
 
 ${chatHistory ? `Previous conversation:\n${chatHistory}\n\n` : ""}The student asks: ${message.trim()}
 
-Respond as a knowledgeable, encouraging flight instructor. Be thorough but concise. Reference specific FAA publications, regulations, or handbook chapters where relevant. If the student seems confused, try a different angle or analogy.`,
-  });
+Respond as a knowledgeable, encouraging flight instructor. Be thorough but concise. Cite specific FAA publications, regulations, or handbook chapters only when you are confident they are correct and current. If the student seems confused, try a different angle or analogy. If asked about something outside verifiable FAA material, say so clearly rather than guessing.`,
+      })
+    );
+    result = outcome.result;
+    provider = outcome.provider;
+    modelName = outcome.model;
+  } catch (err) {
+    if (err instanceof NoLlmProviderError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 
   // Save assistant response
   const [saved] = await db

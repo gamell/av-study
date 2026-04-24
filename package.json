@@ -12,6 +12,10 @@
     "db:seed": "bun run src/lib/db/seed.ts",
     "icons:generate": "bun run scripts/generate-icons.ts"
   },
+  "engines": {
+    "node": "25.x",
+    "bun": ">=1.1.0"
+  },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.0",
     "@ai-sdk/google": "^3.0.0",

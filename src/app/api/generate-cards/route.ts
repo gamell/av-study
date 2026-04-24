@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel, getProviderInfo } from "@/lib/llm";
+import {
+  FACTUALITY_DIRECTIVE,
+  NoLlmProviderError,
+  tryWithFallback,
+} from "@/lib/llm";
 import { db } from "@/lib/db";
 import { cards, cardProgress, categories } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -35,26 +39,42 @@ export async function POST(request: NextRequest) {
       ? "scenario-based questions as a Designated Pilot Examiner (DPE) would ask during the oral portion of a checkride. Frame questions as scenarios."
       : "factual knowledge questions for the FAA Private Pilot Knowledge Test (written exam). Focus on regulations, procedures, and aeronautical knowledge.";
 
-  const model = getModel();
-  const { provider, model: modelName } = getProviderInfo();
+  let result;
+  let provider: string;
+  let modelName: string;
+  try {
+    const outcome = await tryWithFallback((model, providerOptions) =>
+      generateObject({
+        model,
+        providerOptions,
+        schema: cardSchema,
+        prompt: `${FACTUALITY_DIRECTIVE}
 
-  const result = await generateObject({
-    model,
-    schema: cardSchema,
-    prompt: `Generate ${cardCount} high-quality flashcards about "${topic}" for private pilot exam preparation.
+Generate ${cardCount} high-quality flashcards about "${topic}" for private pilot exam preparation.
 
 Style: ${style}
 
 Requirements:
 - Each question should test understanding, not just memorization
 - Answers should be 2-5 sentences, explaining the "why" behind the concept
-- Include ACS codes where applicable (format: PA.X.X.Kn)
-- Reference specific FAA publications (PHAK chapters, 14 CFR sections, AIM sections, AFH chapters)
-- Be factually accurate per current FAA regulations
+- Include ACS codes where applicable (format: PA.X.X.Kn) — only if you are certain the code is correct
+- Reference specific FAA publications (PHAK chapters, 14 CFR sections, AIM sections, AFH chapters) — only reference what you are confident about
+- Be factually accurate per current FAA regulations; do not invent rules or numbers
 - Include mnemonics where commonly used in aviation
 
 Return exactly ${cardCount} cards.`,
-  });
+      })
+    );
+    result = outcome.result;
+    provider = outcome.provider;
+    modelName = outcome.model;
+  } catch (err) {
+    if (err instanceof NoLlmProviderError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 
   // Find or create category
   let [category] = await db

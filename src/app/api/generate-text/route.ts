@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "ai";
-import { getModel, getProviderInfo } from "@/lib/llm";
+import {
+  FACTUALITY_DIRECTIVE,
+  NoLlmProviderError,
+  tryWithFallback,
+} from "@/lib/llm";
 import { db } from "@/lib/db";
 import { cards, cardProgress, studyTexts } from "@/lib/db/schema";
 import { eq, and, lt, asc, inArray } from "drizzle-orm";
@@ -64,12 +68,17 @@ export async function POST(request: NextRequest) {
     )
     .join("\n\n");
 
-  const model = getModel();
-  const { provider, model: modelName } = getProviderInfo();
+  let result;
+  let provider: string;
+  let modelName: string;
+  try {
+    const outcome = await tryWithFallback((model, providerOptions) =>
+      generateText({
+        model,
+        providerOptions,
+        prompt: `${FACTUALITY_DIRECTIVE}
 
-  const result = await generateText({
-    model,
-    prompt: `You are an experienced flight instructor creating a study guide for a student pilot preparing for their private pilot certificate. The student has been struggling with the following concepts. Write a clear, engaging study text that:
+You are an experienced flight instructor creating a study guide for a student pilot preparing for their private pilot certificate. The student has been struggling with the following concepts. Write a clear, engaging study text that:
 
 1. Explains each concept thoroughly, focusing on the "why" behind it
 2. Connects related concepts together so the student sees the bigger picture
@@ -83,8 +92,19 @@ Concepts the student needs to review:
 
 ${conceptList}
 
-Write the study text now. Make it thorough but engaging -- approximately 200-400 words per concept.`,
-  });
+Write the study text now. Make it thorough but engaging -- approximately 200-400 words per concept. If you are not confident about a specific fact or reference, hedge it ("verify in the current PHAK" etc.) rather than asserting it.`,
+      })
+    );
+    result = outcome.result;
+    provider = outcome.provider;
+    modelName = outcome.model;
+  } catch (err) {
+    if (err instanceof NoLlmProviderError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 
   const title = `Study Review - ${selectedCards.length} concepts - ${new Date().toLocaleDateString()}`;
 
