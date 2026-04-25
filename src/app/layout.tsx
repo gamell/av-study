@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DbProvider } from "@/components/db-provider";
 import { OfflineBanner } from "@/components/offline-banner";
+import { InstallHint } from "@/components/install-hint";
 import "./globals.css";
 
 const APP_NAME = "Pilot Study";
@@ -31,6 +32,12 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
+  // Belt-and-suspenders: Next emits the modern `mobile-web-app-capable` via
+  // `appleWebApp.capable`, but iOS < 16.4 only honors the legacy
+  // apple-prefixed name. Emit both so install works back to iOS 12.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
@@ -57,6 +64,7 @@ export default function RootLayout({
         >
           <DbProvider>
             <OfflineBanner />
+            <InstallHint />
             {children}
           </DbProvider>
         </ThemeProvider>

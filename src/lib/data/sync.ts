@@ -20,7 +20,11 @@ class SyncEngine {
     status: "idle",
     lastSyncAt: null,
     pending: 0,
-    online: typeof navigator === "undefined" ? true : navigator.onLine,
+    // Optimistic default. iOS Safari is known to report `navigator.onLine`
+    // incorrectly (often `false`) at module-load time, which would falsely
+    // pin the offline banner on. Trust only the explicit online/offline
+    // events emitted by the browser, plus successful network ops.
+    online: true,
   };
   private initialized = false;
   private flushing = false;
@@ -81,18 +85,16 @@ class SyncEngine {
 
     await this.refreshPendingCount();
 
-    if (navigator.onLine) {
-      await Promise.race([
-        this.pullSnapshot().catch(() => undefined),
-        new Promise((resolve) => setTimeout(resolve, INITIAL_SYNC_TIMEOUT_MS)),
-      ]);
-      await this.flush().catch(() => undefined);
-    } else {
-      this.emit({ status: "offline", online: false });
-    }
+    // Always attempt the initial pull regardless of `navigator.onLine` — Safari
+    // can lie about it. The pull's own catch will surface a real failure.
+    await Promise.race([
+      this.pullSnapshot().catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, INITIAL_SYNC_TIMEOUT_MS)),
+    ]);
+    await this.flush().catch(() => undefined);
 
     if (this.state.status === "initializing" || this.state.status === "pulling") {
-      this.emit({ status: navigator.onLine ? "idle" : "offline" });
+      this.emit({ status: "idle" });
     }
   }
 
@@ -118,13 +120,12 @@ class SyncEngine {
   };
 
   private handleVisibility = () => {
-    if (document.visibilityState === "visible" && navigator.onLine) {
+    if (document.visibilityState === "visible") {
       this.opportunisticPullFlush();
     }
   };
 
   private async opportunisticPullFlush(): Promise<void> {
-    if (!navigator.onLine) return;
     if (this.pulling || this.flushing) return;
     try {
       await this.pullSnapshot();
@@ -146,10 +147,6 @@ class SyncEngine {
    */
   async pullSnapshot(): Promise<void> {
     if (this.pulling) return;
-    if (!navigator.onLine) {
-      this.emit({ status: "offline", online: false });
-      return;
-    }
     this.pulling = true;
     this.emit({ status: "pulling" });
     try {
@@ -227,9 +224,12 @@ class SyncEngine {
       );
 
       await writeMeta(META_KEYS.lastSnapshotAt, snapshot.serverTime);
+      // A successful round-trip is authoritative proof we're online,
+      // regardless of what navigator.onLine claims.
       this.emit({
         status: "idle",
         lastSyncAt: snapshot.serverTime,
+        online: true,
       });
       this.backoffAttempt = 0;
     } catch (err) {
@@ -284,7 +284,6 @@ class SyncEngine {
    */
   async flush(): Promise<void> {
     if (this.flushing) return;
-    if (!navigator.onLine) return;
     this.flushing = true;
     this.emit({ status: "flushing" });
     try {
@@ -312,9 +311,7 @@ class SyncEngine {
         ops = await listPendingOps();
       }
       if (this.state.status === "flushing") {
-        this.emit({
-          status: navigator.onLine ? "idle" : "offline",
-        });
+        this.emit({ status: "idle" });
       }
     } finally {
       this.flushing = false;
@@ -507,11 +504,9 @@ class SyncEngine {
     if (this.flushSoonHandle) return;
     this.flushSoonHandle = setTimeout(() => {
       this.flushSoonHandle = null;
-      if (navigator.onLine) {
-        void this.flush().catch((err) =>
-          console.error("[sync] flush failed:", err)
-        );
-      }
+      void this.flush().catch((err) =>
+        console.error("[sync] flush failed:", err)
+      );
     }, 75);
   }
 }
