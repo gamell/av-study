@@ -1,7 +1,7 @@
 import { db } from "./index";
 import { categories, cards, cardProgress } from "./schema";
 import { count } from "drizzle-orm";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 
 let initialized = false;
 

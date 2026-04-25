@@ -1,10 +1,10 @@
-import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
+import { drizzle, type BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
+import { Database } from "bun:sqlite";
 import * as schema from "./schema";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 
-let _db: BetterSQLite3Database<typeof schema> | null = null;
+let _db: BunSQLiteDatabase<typeof schema> | null = null;
 
 function getDbPath() {
   const dir = process.env.DATA_DIR ?? join(process.cwd(), "data");
@@ -16,16 +16,16 @@ function getDbPath() {
 
 export function getDb() {
   if (!_db) {
-    const sqlite = new Database(getDbPath());
-    sqlite.pragma("journal_mode = WAL");
-    sqlite.pragma("foreign_keys = ON");
+    const sqlite = new Database(getDbPath(), { create: true });
+    sqlite.run("PRAGMA journal_mode = WAL;");
+    sqlite.run("PRAGMA foreign_keys = ON;");
     _db = drizzle(sqlite, { schema });
   }
   return _db;
 }
 
 /** Convenience accessor — same as getDb() but shorter for import sites */
-export const db = new Proxy({} as BetterSQLite3Database<typeof schema>, {
+export const db = new Proxy({} as BunSQLiteDatabase<typeof schema>, {
   get(_target, prop) {
     return (getDb() as unknown as Record<string | symbol, unknown>)[prop];
   },

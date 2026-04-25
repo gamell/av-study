@@ -4,18 +4,11 @@
 FROM oven/bun:1 AS base
 WORKDIR /app
 
-# ─── Dependencies (all, incl. dev for the build step) ────────────────────────
-# `better-sqlite3` is a native module compiled via node-gyp during install.
-# The oven/bun:1 (Debian) image does not ship python3/make/g++ or node-gyp —
-# install them here so the prebuild-install fallback can build from source.
-# nodejs+npm are needed because `npm install -g node-gyp` is the canonical
-# way to put a `node-gyp` binary on PATH; bun does not provide its own.
+# ─── Dependencies ────────────────────────────────────────────────────────────
+# All dependencies are pure JS (SQLite is provided by Bun's built-in
+# `bun:sqlite` module — no native compilation needed). `bun install` is all
+# we need; no apt toolchain, no node-gyp.
 FROM base AS deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 make g++ ca-certificates nodejs npm \
- && npm install -g node-gyp \
- && apt-get purge -y --auto-remove npm \
- && rm -rf /var/lib/apt/lists/* /root/.npm
 COPY package.json bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile
