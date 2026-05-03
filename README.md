@@ -9,7 +9,7 @@ A self-hosted flashcard study app for the FAA Private Pilot knowledge test and c
 - **500+ Seed Cards**: Pre-loaded flashcards covering all ACS areas of operation
 - **Offline-First PWA**: Install to your phone's home screen; cards, progress, notes, and search all work in Airplane Mode. Reviews queue locally and sync back to the server the next time you're online.
 - **Multi-Device Sync**: Server SQLite is the source of truth; laptop and phone stay in sync automatically (SM-2 review scores are additive so nothing is lost).
-- **AI-Powered Extensions**: Generate additional cards or study texts using OpenAI, Anthropic, or Google Gemini (online only)
+- **AI-Powered Extensions**: Generate additional cards, study texts, per-card infographics, or chat responses using OpenAI, Anthropic, or Google Gemini (online only)
 - **Study Text Generator**: Creates conversational review texts from failed cards (for Speechify/audio)
 - **Progress Dashboard**: Track mastery by category with weak area highlighting
 - **Dark Mode**: System-aware with manual toggle
@@ -148,9 +148,10 @@ git clone https://github.com/YOUR_USERNAME/pilot-study.git
 cd pilot-study
 bun install
 
-# Optional: AI features.
-cp .env.example .env.local
-# Edit .env.local with your API key(s)
+# Optional: AI features in local development.
+# `.secrets` is gitignored and loaded automatically by `bun dev`.
+cp .env.example .secrets
+# Edit .secrets with your API key(s)
 
 bun dev
 ```
@@ -166,7 +167,7 @@ Once the app is deployed (or exposed over HTTPS on your LAN), you can install it
 3. Launch it from the home screen. The service worker caches the entire app shell; cards, progress, notes, and search keep working offline.
 4. Reviews done offline are queued in your browser and automatically flushed the next time the device reconnects. The badge in the nav header shows `N pending` until the queue drains.
 
-Generating cards / study texts and the in-card AI chat require network — those buttons will show a friendly "requires internet" notice when offline.
+Generating cards / study texts / infographics and the in-card AI chat require network — those buttons will show a friendly "requires internet" notice when offline. Previously generated infographics are stored with the rest of the synced content and remain available offline after they have synced.
 
 > **iOS note**: adding a PWA to the home screen requires HTTPS. For LAN testing, use Tailscale, `mkcert`, or `ngrok` to expose an HTTPS origin.
 
@@ -180,12 +181,12 @@ Generating cards / study texts and the in-card AI chat require network — those
 
 ## AI features & provider fallback
 
-The three online-only AI features — "Generate cards", "Generate study text", and in-card "AI chat" — run against whichever LLM providers you've configured. Every prompt is prefixed with a strict factuality directive that forbids inventing regulations, ACS codes, or handbook references and tells the model to hedge when uncertain (FAA-exam content has to be right).
+The online-only AI features — "Generate cards", "Generate study text", "Generate infographic", and in-card "AI chat" — run against whichever providers you've configured. Text/chat prompts are prefixed with a strict factuality directive that forbids inventing regulations, ACS codes, or handbook references and tells the model to hedge when uncertain (FAA-exam content has to be right). Infographics use `OPENAI_API_KEY` and the OpenAI image model `gpt-image-2`.
 
 Configure **any one** of these keys to turn AI features on; configure more than one to get automatic fallback:
 
 - `ANTHROPIC_API_KEY` — Anthropic (primary `claude-opus-4-6` with adaptive thinking at `effort: "max"`, fallback `claude-opus-4-5-20251101`)
-- `OPENAI_API_KEY` — OpenAI (primary `gpt-5.5`, fallback `gpt-5.4`)
+- `OPENAI_API_KEY` — OpenAI (primary `gpt-5.5`, fallback `gpt-5.4`; also required for `gpt-image-2` infographics)
 - `GOOGLE_GENERATIVE_AI_API_KEY` — Google (primary `gemini-3.1-pro-preview`, fallback `gemini-2.5-pro`)
 
 ### Priority chain
@@ -237,7 +238,8 @@ Flashcard content is based on official FAA publications:
 
 | Command                  | Description                                                               |
 | ------------------------ | ------------------------------------------------------------------------- |
-| `bun dev`                | Dev server (Turbopack). PWA service worker is disabled in dev.            |
+| `bun dev`                | Dev server (Turbopack) with `.secrets` loaded. PWA service worker is disabled in dev. |
+| `bun run dev:no-secrets` | Dev server without loading `.secrets`.                                    |
 | `bun run build`          | Production build (webpack). Generates `public/sw.js` + precache manifest. |
 | `bun start`              | Start the production server.                                              |
 | `bun run db:generate`    | Generate a drizzle migration from schema changes.                         |
