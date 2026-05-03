@@ -1,4 +1,4 @@
-import { getClientDb, writeMeta, META_KEYS } from "./db";
+import { getClientDb, readMeta, writeMeta, META_KEYS } from "./db";
 import { listPendingOps, pendingOpCount, removeOp, updateOp } from "./ops";
 import type {
   CardNote,
@@ -84,6 +84,10 @@ class SyncEngine {
     }
 
     await this.refreshPendingCount();
+    const persistedLastSyncAt = await readMeta(META_KEYS.lastSnapshotAt);
+    if (persistedLastSyncAt) {
+      this.emit({ lastSyncAt: persistedLastSyncAt });
+    }
 
     // Always attempt the initial pull regardless of `navigator.onLine` — Safari
     // can lie about it. The pull's own catch will surface a real failure.
@@ -192,6 +196,7 @@ class SyncEngine {
           db.studySessions,
           db.studyTexts,
           db.cardNotes,
+          db.cardInfographics,
         ],
         async () => {
           await this.reconcileTable(
@@ -219,6 +224,11 @@ class SyncEngine {
           );
           await this.reconcileTable(db.cardNotes, snapshot.cardNotes, (local) =>
             lockedNoteIds.has(local.id) || local.id < 0
+          );
+          await this.reconcileTable(
+            db.cardInfographics,
+            snapshot.cardInfographics,
+            () => false
           );
         }
       );
@@ -257,12 +267,14 @@ class SyncEngine {
     const serverById = new Map<number, T>();
     for (const r of serverRows) serverById.set(r.id, r);
     const localRows = await table.toArray();
+    const localById = new Map<number, T>();
+    for (const r of localRows) localById.set(r.id, r);
 
     const toPut: T[] = [];
     const toDelete: number[] = [];
 
     for (const serverRow of serverRows) {
-      const local = localRows.find((r) => r.id === serverRow.id);
+      const local = localById.get(serverRow.id);
       if (local && isLocked(local)) continue;
       toPut.push(serverRow);
     }

@@ -93,9 +93,29 @@ export const cardNotes = sqliteTable("card_notes", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+export const cardInfographics = sqliteTable("card_infographics", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  cardId: integer("card_id")
+    .notNull()
+    .unique()
+    .references(() => cards.id, { onDelete: "cascade" }),
+  prompt: text("prompt").notNull(),
+  imageBase64: text("image_base64").notNull(),
+  mimeType: text("mime_type").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
 export type Category = typeof categories.$inferSelect;
 export type Card = typeof cards.$inferSelect;
 export type CardProgress = typeof cardProgress.$inferSelect;
 export type StudySession = typeof studySessions.$inferSelect;
 export type StudyText = typeof studyTexts.$inferSelect;
 export type CardNote = typeof cardNotes.$inferSelect;
+export type CardInfographic = typeof cardInfographics.$inferSelect;

@@ -22,6 +22,7 @@ import {
   X,
   StickyNote,
   MessageSquare,
+  ImageIcon,
   Wand2,
   Loader2,
   Check,
@@ -39,6 +40,7 @@ import { updateCard, deleteCard } from "@/lib/data/cards";
 import { addNote, listNotes } from "@/lib/data/notes";
 import { syncEngine } from "@/lib/data/sync";
 import { useDb } from "@/components/db-provider";
+import { CardInfographic } from "@/components/card-infographic";
 import type { CardNote as Note } from "@/lib/data/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -49,14 +51,34 @@ interface GeneratedCard {
   answer: string;
 }
 
+type DeckFilter = "all" | "knowledge" | "oral";
+type CardRowTab = "details" | "notes" | "chat" | "infographic";
+
+const DECK_FILTERS: DeckFilter[] = ["all", "knowledge", "oral"];
+const CARD_ROW_TABS: CardRowTab[] = [
+  "details",
+  "notes",
+  "chat",
+  "infographic",
+];
+
+function getDeckFilterLabel(deckFilter: DeckFilter): string {
+  switch (deckFilter) {
+    case "all":
+      return "All";
+    case "knowledge":
+      return "Knowledge Test";
+    case "oral":
+      return "Checkride Oral";
+  }
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function DatabasePage() {
   const [cards, setCards] = useState<SearchCard[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [deckFilter, setDeckFilter] = useState<"all" | "knowledge" | "oral">(
-    "all"
-  );
+  const [deckFilter, setDeckFilter] = useState<DeckFilter>("all");
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -131,7 +153,7 @@ export default function DatabasePage() {
 
         {/* Filters */}
         <div className="flex items-center gap-2 mb-6">
-          {(["all", "knowledge", "oral"] as const).map((d) => (
+          {DECK_FILTERS.map((d) => (
             <Button
               key={d}
               variant={deckFilter === d ? "default" : "outline"}
@@ -141,11 +163,7 @@ export default function DatabasePage() {
                 setPage(1);
               }}
             >
-              {d === "all"
-                ? "All"
-                : d === "knowledge"
-                  ? "Knowledge Test"
-                  : "Checkride Oral"}
+              {getDeckFilterLabel(d)}
             </Button>
           ))}
         </div>
@@ -255,9 +273,7 @@ function CardRow({
   const [editAcs, setEditAcs] = useState(card.acsCode || "");
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "notes" | "chat">(
-    "details"
-  );
+  const [activeTab, setActiveTab] = useState<CardRowTab>("details");
 
   const save = async () => {
     setSaving(true);
@@ -325,7 +341,7 @@ function CardRow({
         <div className="border-t px-4 py-4 space-y-4">
           {/* Tabs */}
           <div className="flex gap-1 border-b pb-2">
-            {(["details", "notes", "chat"] as const).map((tab) => (
+            {CARD_ROW_TABS.map((tab) => (
               <Button
                 key={tab}
                 variant={activeTab === tab ? "default" : "ghost"}
@@ -343,6 +359,12 @@ function CardRow({
                   <>
                     <MessageSquare className="h-3.5 w-3.5 mr-1" />
                     AI Chat
+                  </>
+                )}
+                {tab === "infographic" && (
+                  <>
+                    <ImageIcon className="h-3.5 w-3.5 mr-1" />
+                    Infographic
                   </>
                 )}
               </Button>
@@ -506,6 +528,19 @@ function CardRow({
 
           {/* Chat tab */}
           {activeTab === "chat" && <InlineChat cardId={card.id} />}
+
+          {/* Infographic tab */}
+          {activeTab === "infographic" && (
+            <CardInfographic
+              card={{
+                id: card.id,
+                question: card.question,
+                answer: card.answer,
+                acsCode: card.acsCode,
+                references: card.references,
+              }}
+            />
+          )}
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   StickyNote,
   MessageSquare,
+  ImageIcon,
   Copy,
   X,
   Send,
@@ -14,28 +15,35 @@ import {
   Bot,
   User,
 } from "lucide-react";
+import { addNote, insertNoteFromServer, listNotes } from "@/lib/data/notes";
+import { CardInfographic } from "@/components/card-infographic";
+import type { CardNote as Note } from "@/lib/data/types";
 
-interface Note {
-  id: number;
-  type: "note" | "ai_user" | "ai_assistant";
-  content: string;
-  createdAt: string;
-}
+type ActionPanel = "notes" | "chat" | "infographic";
 
 interface CardActionsProps {
   cardId: number;
+  question: string;
+  answer: string;
+  acsCode?: string | null;
+  references?: string | null;
   onDuplicate?: () => void;
 }
 
-export function CardActions({ cardId, onDuplicate }: CardActionsProps) {
-  const [activePanel, setActivePanel] = useState<
-    "notes" | "chat" | null
-  >(null);
+export function CardActions({
+  cardId,
+  question,
+  answer,
+  acsCode,
+  references,
+  onDuplicate,
+}: CardActionsProps) {
+  const [activePanel, setActivePanel] = useState<ActionPanel | null>(null);
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
-  const togglePanel = (panel: "notes" | "chat") => {
-    setActivePanel(activePanel === panel ? null : panel);
-  };
+  function togglePanel(panel: ActionPanel): void {
+    setActivePanel((currentPanel) => (currentPanel === panel ? null : panel));
+  }
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-3">
@@ -56,6 +64,14 @@ export function CardActions({ cardId, onDuplicate }: CardActionsProps) {
         >
           <MessageSquare className="h-4 w-4 mr-1.5" />
           AI Chat
+        </Button>
+        <Button
+          variant={activePanel === "infographic" ? "default" : "outline"}
+          size="sm"
+          onClick={() => togglePanel("infographic")}
+        >
+          <ImageIcon className="h-4 w-4 mr-1.5" />
+          Infographic
         </Button>
         {!confirmDuplicate ? (
           <Button
@@ -100,6 +116,13 @@ export function CardActions({ cardId, onDuplicate }: CardActionsProps) {
       {activePanel === "chat" && (
         <ChatPanel cardId={cardId} />
       )}
+
+      {/* Infographic Panel */}
+      {activePanel === "infographic" && (
+        <CardInfographic
+          card={{ id: cardId, question, answer, acsCode, references }}
+        />
+      )}
     </div>
   );
 }
@@ -108,25 +131,30 @@ function NotesPanel({ cardId }: { cardId: number }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [newNote, setNewNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/cards/${cardId}/notes`)
-      .then((r) => r.json())
-      .then((all: Note[]) => setNotes(all.filter((n) => n.type === "note")));
+    let cancelled = false;
+    listNotes(cardId).then((all) => {
+      if (cancelled) return;
+      setNotes(all.filter((n) => n.type === "note"));
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [cardId]);
 
   const saveNote = async () => {
     if (!newNote.trim() || saving) return;
     setSaving(true);
-    const res = await fetch(`/api/cards/${cardId}/notes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newNote, type: "note" }),
-    });
-    const saved = await res.json();
-    setNotes((prev) => [...prev, saved]);
-    setNewNote("");
-    setSaving(false);
+    try {
+      const saved = await addNote(cardId, newNote, "note");
+      setNotes((prev) => [...prev, saved]);
+      setNewNote("");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -141,7 +169,9 @@ function NotesPanel({ cardId }: { cardId: number }) {
         )}
       </div>
 
-      {notes.length > 0 && (
+      {!loaded ? (
+        <p className="text-sm text-muted-foreground">Loading notes...</p>
+      ) : notes.length > 0 && (
         <div className="space-y-2 max-h-48 overflow-y-auto">
           {notes.map((note) => (
             <div
@@ -167,13 +197,13 @@ function NotesPanel({ cardId }: { cardId: number }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
-              saveNote();
+              void saveNote();
             }
           }}
         />
         <Button
           size="sm"
-          onClick={saveNote}
+          onClick={() => void saveNote()}
           disabled={!newNote.trim() || saving}
           className="self-end"
         >
@@ -192,16 +222,21 @@ function ChatPanel({ cardId }: { cardId: number }) {
   const [messages, setMessages] = useState<Note[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch(`/api/cards/${cardId}/notes`)
-      .then((r) => r.json())
-      .then((all: Note[]) =>
-        setMessages(
-          all.filter((n) => n.type === "ai_user" || n.type === "ai_assistant")
-        )
+    let cancelled = false;
+    listNotes(cardId).then((all) => {
+      if (cancelled) return;
+      setMessages(
+        all.filter((n) => n.type === "ai_user" || n.type === "ai_assistant")
       );
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [cardId]);
 
   useEffect(() => {
@@ -213,14 +248,18 @@ function ChatPanel({ cardId }: { cardId: number }) {
     const userMsg = input.trim();
     setInput("");
     setSending(true);
+    const optimisticId = -Date.now();
+    const nowIso = new Date().toISOString();
 
     setMessages((prev) => [
       ...prev,
       {
-        id: Date.now(),
+        id: optimisticId,
+        cardId,
         type: "ai_user",
         content: userMsg,
-        createdAt: new Date().toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
       },
     ]);
 
@@ -231,35 +270,66 @@ function ChatPanel({ cardId }: { cardId: number }) {
         body: JSON.stringify({ message: userMsg }),
       });
       const data = await res.json();
+      if (data.user) {
+        await insertNoteFromServer(data.user);
+      }
       if (data.error) {
         setMessages((prev) => [
-          ...prev,
+          ...prev.filter((msg) => msg.id !== optimisticId),
+          data.user ?? {
+            id: optimisticId,
+            cardId,
+            type: "ai_user",
+            content: userMsg,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          },
           {
             id: Date.now() + 1,
+            cardId,
             type: "ai_assistant",
             content: `Error: ${data.error}`,
             createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           },
         ]);
       } else {
+        if (data.assistant) {
+          await insertNoteFromServer(data.assistant);
+        }
+        const assistantIso = new Date().toISOString();
         setMessages((prev) => [
-          ...prev,
-          {
+          ...prev.filter((msg) => msg.id !== optimisticId),
+          data.user ?? {
+            id: optimisticId,
+            cardId,
+            type: "ai_user",
+            content: userMsg,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          },
+          data.assistant ?? {
             id: data.id,
+            cardId,
             type: "ai_assistant",
             content: data.content,
-            createdAt: new Date().toISOString(),
+            createdAt: assistantIso,
+            updatedAt: assistantIso,
           },
         ]);
       }
     } catch {
+      const errorIso = new Date().toISOString();
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
+          cardId,
           type: "ai_assistant",
-          content: "Failed to get response. Check your LLM configuration.",
-          createdAt: new Date().toISOString(),
+          content:
+            "AI chat requires an internet connection. Try again when you're online.",
+          createdAt: errorIso,
+          updatedAt: errorIso,
         },
       ]);
     }
@@ -277,7 +347,9 @@ function ChatPanel({ cardId }: { cardId: number }) {
       </div>
 
       <div ref={scrollRef} className="space-y-3 max-h-64 overflow-y-auto">
-        {messages.length === 0 && (
+        {!loaded ? (
+          <p className="text-sm text-muted-foreground">Loading chat...</p>
+        ) : messages.length === 0 && (
           <p className="text-sm text-muted-foreground italic">
             Ask the AI flight instructor anything about this card...
           </p>
@@ -324,14 +396,14 @@ function ChatPanel({ cardId }: { cardId: number }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              sendMessage();
+              void sendMessage();
             }
           }}
           disabled={sending}
         />
         <Button
           size="sm"
-          onClick={sendMessage}
+          onClick={() => void sendMessage()}
           disabled={!input.trim() || sending}
         >
           {sending ? (

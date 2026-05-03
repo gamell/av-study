@@ -36,11 +36,14 @@ export async function POST(
   }
 
   // Save user message
-  await db.insert(cardNotes).values({
-    cardId,
-    type: "ai_user",
-    content: message.trim(),
-  });
+  const [userNote] = await db
+    .insert(cardNotes)
+    .values({
+      cardId,
+      type: "ai_user",
+      content: message.trim(),
+    })
+    .returning();
 
   // Load chat history
   const history = await db
@@ -89,10 +92,13 @@ Respond as a knowledgeable, encouraging flight instructor. Be thorough but conci
     modelName = outcome.model;
   } catch (err) {
     if (err instanceof NoLlmProviderError) {
-      return NextResponse.json({ error: err.message }, { status: 503 });
+      return NextResponse.json(
+        { error: err.message, user: userNote },
+        { status: 503 }
+      );
     }
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: message, user: userNote }, { status: 502 });
   }
 
   // Save assistant response
@@ -108,6 +114,8 @@ Respond as a knowledgeable, encouraging flight instructor. Be thorough but conci
   return NextResponse.json({
     id: saved.id,
     content: result.text,
+    user: userNote,
+    assistant: saved,
     provider,
     model: modelName,
   });

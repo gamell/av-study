@@ -1,5 +1,5 @@
 import { getClientDb } from "./db";
-import { enqueueOp } from "./ops";
+import { enqueueReviewOp } from "./ops";
 import { sm2, type Quality } from "@/lib/sm2";
 
 export interface ReviewResult {
@@ -42,8 +42,7 @@ export async function recordReview(
     updatedAt: now,
   });
 
-  await enqueueOp({
-    kind: "review",
+  await enqueueReviewOp({
     cardId,
     quality,
     createdAt: now,

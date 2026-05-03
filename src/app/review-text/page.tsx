@@ -22,9 +22,13 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { getAllCards } from "@/lib/data/cards";
-import { listStudyTexts } from "@/lib/data/study-texts";
+import {
+  insertStudyTextFromServer,
+  listStudyTexts,
+} from "@/lib/data/study-texts";
 import { syncEngine } from "@/lib/data/sync";
 import { useDb } from "@/components/db-provider";
+import type { StudyText } from "@/lib/data/types";
 
 interface FailedCard {
   id: number;
@@ -41,6 +45,28 @@ interface SavedText {
   provider: string;
   model: string;
   createdAt: string;
+}
+
+function studyTextFromResponse(data: {
+  id: number;
+  title: string;
+  content: string;
+  provider: string;
+  model: string;
+  text?: StudyText;
+}): StudyText {
+  if (data.text) return data.text;
+  const now = new Date().toISOString();
+  return {
+    id: data.id,
+    title: data.title,
+    content: data.content,
+    cardIds: "[]",
+    provider: data.provider,
+    model: data.model,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 export default function ReviewTextPage() {
@@ -105,16 +131,18 @@ export default function ReviewTextPage() {
       if (data.error) {
         alert(data.error);
       } else {
+        const savedText = studyTextFromResponse(data);
+        await insertStudyTextFromServer(savedText);
         setGeneratedText(data.content);
         setSavedTexts((prev) => [
           ...prev,
           {
-            id: data.id,
-            title: data.title,
-            content: data.content,
-            provider: data.provider,
-            model: data.model,
-            createdAt: new Date().toISOString(),
+            id: savedText.id,
+            title: savedText.title,
+            content: savedText.content,
+            provider: savedText.provider,
+            model: savedText.model,
+            createdAt: savedText.createdAt,
           },
         ]);
         void syncEngine.syncNow();
@@ -146,16 +174,18 @@ export default function ReviewTextPage() {
       if (data.error) {
         alert(data.error);
       } else {
+        const savedText = studyTextFromResponse(data);
+        await insertStudyTextFromServer(savedText);
         setGeneratedText(data.content);
         setSavedTexts((prev) => [
           ...prev,
           {
-            id: data.id,
-            title: data.title,
-            content: data.content,
-            provider: data.provider,
-            model: data.model,
-            createdAt: new Date().toISOString(),
+            id: savedText.id,
+            title: savedText.title,
+            content: savedText.content,
+            provider: savedText.provider,
+            model: savedText.model,
+            createdAt: savedText.createdAt,
           },
         ]);
         void syncEngine.syncNow();

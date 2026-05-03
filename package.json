@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "bun --env-file=.secrets next dev --turbopack",
+    "dev:no-secrets": "next dev --turbopack",
     "build": "bun --bun next build --webpack",
-    "start": "bun .next/standalone/server.js",
+    "start": "bun run prepare:standalone && bun .next/standalone/server.js",
+    "test": "bun test",
     "lint": "eslint .",
+    "prepare:standalone": "bun run scripts/prepare-standalone.ts",
     "db:generate": "drizzle-kit generate",
     "db:seed": "bun run src/lib/db/seed.ts",
     "icons:generate": "bun run scripts/generate-icons.ts"
@@ -44,6 +47,7 @@
     "drizzle-kit": "^0.31.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "16.2.3",
+    "fake-indexeddb": "^6.2.5",
     "postcss": "^8.5.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.0",

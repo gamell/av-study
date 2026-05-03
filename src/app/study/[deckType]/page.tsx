@@ -23,6 +23,8 @@ import { recordReview } from "@/lib/data/reviews";
 import { createSession, updateSession } from "@/lib/data/sessions";
 import { useDb } from "@/components/db-provider";
 import type { DeckType } from "@/lib/data/types";
+import { shouldWaitForInitialStudyLoad } from "./study-readiness";
+import { orderStudyCards, type StudyMode } from "./study-order";
 
 interface StudyCard {
   id: number;
@@ -34,6 +36,38 @@ interface StudyCard {
   repetitions: number;
   easeFactor: number;
   interval: number;
+}
+
+const STUDY_MODES: StudyMode[] = ["regular", "randomized"];
+
+interface StudyModeSelectorProps {
+  className: string;
+  studyMode: StudyMode;
+  onStudyModeChange: (mode: StudyMode) => Promise<void>;
+}
+
+function StudyModeSelector({
+  className,
+  studyMode,
+  onStudyModeChange,
+}: StudyModeSelectorProps) {
+  return (
+    <div className={className}>
+      <span className="text-xs text-muted-foreground">Mode</span>
+      {STUDY_MODES.map((mode) => (
+        <Button
+          key={mode}
+          type="button"
+          variant={studyMode === mode ? "default" : "outline"}
+          size="sm"
+          className="h-7 px-2 text-xs capitalize"
+          onClick={() => void onStudyModeChange(mode)}
+        >
+          {mode}
+        </Button>
+      ))}
+    </div>
+  );
 }
 
 export default function StudyPage({
@@ -54,13 +88,14 @@ export default function StudyPage({
   const [isComplete, setIsComplete] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [loadedOnce, setLoadedOnce] = useState(false);
+  const [studyMode, setStudyMode] = useState<StudyMode>("regular");
 
   const deckLabel = deckType === "knowledge" ? "Knowledge Test" : "Checkride Oral";
 
-  const loadCards = useCallback(async () => {
+  const loadCards = useCallback(async (mode: StudyMode = studyMode) => {
     setIsLoading(true);
     const data = await getDueCards(deckType as DeckType);
-    setDueCards(data);
+    setDueCards(orderStudyCards(data, mode));
     setCurrentIndex(0);
     setCardsReviewed(0);
     setCardsCorrect(0);
@@ -74,21 +109,32 @@ export default function StudyPage({
 
     setIsLoading(false);
     setLoadedOnce(true);
-  }, [deckType]);
+  }, [deckType, studyMode]);
 
   /**
-   * On first mount, wait for the initial snapshot pull to complete so we
-   * don't flash "All caught up" while IDB is still empty. Subsequent loads
-   * (study-again button, deck change) run immediately.
+   * On first mount, wait until we've seen at least one persisted snapshot. A
+   * rehydrated snapshot can be used immediately, even while a network pull is
+   * still trying in the background during offline boot.
    */
   useEffect(() => {
     if (loadedOnce) return;
-    const booting =
-      syncState.status === "initializing" || syncState.status === "pulling";
-    const idbProbablyEmpty = syncState.lastSyncAt === null;
-    if (booting || idbProbablyEmpty) return;
+    if (
+      shouldWaitForInitialStudyLoad({
+        loadedOnce,
+        lastSyncAt: syncState.lastSyncAt,
+        syncStatus: syncState.status,
+      })
+    ) return;
     loadCards();
-  }, [loadCards, loadedOnce, syncState.status, syncState.lastSyncAt]);
+  }, [loadCards, loadedOnce, syncState.lastSyncAt, syncState.status]);
+
+  const handleStudyModeChange = async (mode: StudyMode) => {
+    if (mode === studyMode) return;
+    setStudyMode(mode);
+    if (loadedOnce) {
+      await loadCards(mode);
+    }
+  };
 
   const handleDuplicate = async () => {
     const card = dueCards[currentIndex];
@@ -247,7 +293,7 @@ export default function StudyPage({
             </div>
 
             <div className="flex gap-3">
-              <Button onClick={loadCards} variant="outline">
+              <Button onClick={() => void loadCards()} variant="outline">
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Study Again
               </Button>
@@ -289,6 +335,11 @@ export default function StudyPage({
               <h1 className="text-xl font-semibold">{deckLabel}</h1>
             </div>
             <div className="flex items-center gap-4 text-sm">
+              <StudyModeSelector
+                className="hidden items-center gap-1 sm:flex"
+                studyMode={studyMode}
+                onStudyModeChange={handleStudyModeChange}
+              />
               <Badge variant="secondary" className="font-mono">
                 {currentIndex + 1} / {dueCards.length}
               </Badge>
@@ -300,6 +351,11 @@ export default function StudyPage({
               </div>
             </div>
           </div>
+          <StudyModeSelector
+            className="mb-3 flex items-center gap-2 sm:hidden"
+            studyMode={studyMode}
+            onStudyModeChange={handleStudyModeChange}
+          />
           <Progress value={currentIndex + 1} max={dueCards.length} />
         </div>
 
@@ -325,6 +381,10 @@ export default function StudyPage({
             </p>
             <CardActions
               cardId={currentCard.id}
+              question={currentCard.question}
+              answer={currentCard.answer}
+              acsCode={currentCard.acsCode}
+              references={currentCard.references}
               onDuplicate={handleDuplicate}
             />
           </div>

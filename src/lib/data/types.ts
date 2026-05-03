@@ -5,6 +5,7 @@ import type {
   StudySession as ServerStudySession,
   StudyText as ServerStudyText,
   CardNote as ServerCardNote,
+  CardInfographic as ServerCardInfographic,
 } from "@/lib/db/schema";
 
 export type DeckType = "knowledge" | "oral";
@@ -15,6 +16,7 @@ export type CardProgress = ServerCardProgress;
 export type StudySession = ServerStudySession;
 export type StudyText = ServerStudyText;
 export type CardNote = ServerCardNote;
+export type CardInfographic = ServerCardInfographic;
 
 export interface SnapshotPayload {
   serverTime: string;
@@ -24,6 +26,7 @@ export interface SnapshotPayload {
   studySessions: StudySession[];
   studyTexts: StudyText[];
   cardNotes: CardNote[];
+  cardInfographics: CardInfographic[];
 }
 
 /**

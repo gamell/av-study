@@ -7,6 +7,7 @@ import {
   studySessions,
   studyTexts,
   cardNotes,
+  cardInfographics,
 } from "@/lib/db/schema";
 import { ensureDatabase } from "@/lib/db/ensure-seeded";
 
@@ -20,6 +21,7 @@ export async function GET() {
     studySessionsRows,
     studyTextsRows,
     cardNotesRows,
+    cardInfographicsRows,
   ] = await Promise.all([
     db.select().from(categories),
     db.select().from(cards),
@@ -27,6 +29,7 @@ export async function GET() {
     db.select().from(studySessions),
     db.select().from(studyTexts),
     db.select().from(cardNotes),
+    db.select().from(cardInfographics),
   ]);
 
   return NextResponse.json(
@@ -38,6 +41,7 @@ export async function GET() {
       studySessions: studySessionsRows,
       studyTexts: studyTextsRows,
       cardNotes: cardNotesRows,
+      cardInfographics: cardInfographicsRows,
     },
     {
       headers: {

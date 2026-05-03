@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DbProvider } from "@/components/db-provider";
 import { OfflineBanner } from "@/components/offline-banner";
+import { OfflineRouteWarmer } from "@/components/offline-route-warmer";
 import { InstallHint } from "@/components/install-hint";
 import "./globals.css";
 
@@ -65,6 +66,7 @@ export default function RootLayout({
           <DbProvider>
             <OfflineBanner />
             <InstallHint />
+            <OfflineRouteWarmer />
             {children}
           </DbProvider>
         </ThemeProvider>

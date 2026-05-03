@@ -6,6 +6,7 @@ import type {
   StudySession,
   StudyText,
   CardNote,
+  CardInfographic,
   PendingOp,
   MetaRow,
 } from "./types";
@@ -24,6 +25,7 @@ export class AppDexie extends Dexie {
   studySessions!: Table<StudySession, number>;
   studyTexts!: Table<StudyText, number>;
   cardNotes!: Table<CardNote, number>;
+  cardInfographics!: Table<CardInfographic, number>;
   pendingOps!: Table<PendingOp, number>;
   meta!: Table<MetaRow, string>;
 
@@ -39,6 +41,10 @@ export class AppDexie extends Dexie {
       cardNotes: "id, cardId, type, createdAt",
       pendingOps: "++localId, kind, createdAt",
       meta: "&key",
+    });
+
+    this.version(2).stores({
+      cardInfographics: "id, &cardId, updatedAt",
     });
   }
 }

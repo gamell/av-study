@@ -123,6 +123,7 @@ Write the study text now. Make it thorough but engaging -- approximately 200-400
     id: saved.id,
     title: saved.title,
     content: result.text,
+    text: saved,
     cardCount: selectedCards.length,
     provider,
     model: modelName,
