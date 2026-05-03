@@ -13,8 +13,9 @@ Agents MUST update this file whenever they push code to `main`.
   `cardInfographics` store.
 - Verification: `bun test` passed with 16 tests; `bun run build` passed.
   `bun run lint` could not start because system Node aborts on missing
-  `/opt/homebrew/opt/simdutf/lib/libsimdutf.33.dylib`; use the Bun-forced
-  CLI workaround described in `docs/LEARNINGS.md` for Drizzle generation.
+  `/opt/homebrew/opt/simdutf/lib/libsimdutf.33.dylib`. Forcing ESLint through
+  Bun starts the CLI but fails in config validation with
+  `JSON.stringify cannot serialize cyclic structures`.
 - Notes: Infographic generation is online-only and requires `OPENAI_API_KEY`;
   generated images remain available offline after syncing.
 
