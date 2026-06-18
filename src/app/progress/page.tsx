@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { NavHeader } from "@/components/nav-header";
 import {
   Card,
   CardContent,
@@ -50,12 +49,9 @@ export default function ProgressPage() {
 
   if (!data) {
     return (
-      <>
-        <NavHeader />
-        <main className="mx-auto max-w-5xl px-4 py-12">
-          <div className="text-center text-muted-foreground">Loading...</div>
-        </main>
-      </>
+      <main className="mx-auto max-w-5xl px-4 py-12">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </main>
     );
   }
 
@@ -81,16 +77,14 @@ export default function ProgressPage() {
   const oNew = oTotal - oMastered - oEasy - oHard;
 
   return (
-    <>
-      <NavHeader />
-      <main className="mx-auto max-w-5xl px-4 py-12">
+    <main className="mx-auto max-w-5xl px-4 py-12">
         <div className="flex items-center gap-3 mb-8">
           <BarChart3 className="h-6 w-6 text-primary" />
           <h1 className="text-3xl font-bold">Progress Dashboard</h1>
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-5 text-xs text-muted-foreground mb-6">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground mb-6">
           <span className="flex items-center gap-1.5">
             <LegendDot className={MASTERED_CLASS} /> Mastered
           </span>
@@ -241,8 +235,7 @@ export default function ProgressPage() {
             </CardContent>
           </Card>
         )}
-      </main>
-    </>
+    </main>
   );
 }
 

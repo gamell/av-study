@@ -4,7 +4,8 @@ import { z } from "zod";
 import {
   FACTUALITY_DIRECTIVE,
   NoLlmProviderError,
-  tryWithFallback,
+  getTextModel,
+  resolveTextModel,
 } from "@/lib/llm";
 import { db } from "@/lib/db";
 import { cards, cardProgress, categories } from "@/lib/db/schema";
@@ -25,7 +26,12 @@ const cardSchema = z.object({
 export async function POST(request: NextRequest) {
   await ensureDatabase();
 
-  const { topic, deckType, count: cardCount = 10 } = await request.json();
+  const {
+    topic,
+    deckType,
+    count: cardCount = 10,
+    model: requestedModel,
+  } = await request.json();
 
   if (!topic || !deckType) {
     return NextResponse.json(
@@ -39,16 +45,14 @@ export async function POST(request: NextRequest) {
       ? "scenario-based questions as a Designated Pilot Examiner (DPE) would ask during the oral portion of a checkride. Frame questions as scenarios."
       : "factual knowledge questions for the FAA Private Pilot Knowledge Test (written exam). Focus on regulations, procedures, and aeronautical knowledge.";
 
+  const provider = "openrouter";
+  const modelName = resolveTextModel(requestedModel);
   let result;
-  let provider: string;
-  let modelName: string;
   try {
-    const outcome = await tryWithFallback((model, providerOptions) =>
-      generateObject({
-        model,
-        providerOptions,
-        schema: cardSchema,
-        prompt: `${FACTUALITY_DIRECTIVE}
+    result = await generateObject({
+      model: getTextModel(modelName),
+      schema: cardSchema,
+      prompt: `${FACTUALITY_DIRECTIVE}
 
 Generate ${cardCount} high-quality flashcards about "${topic}" for private pilot exam preparation.
 
@@ -63,11 +67,7 @@ Requirements:
 - Include mnemonics where commonly used in aviation
 
 Return exactly ${cardCount} cards.`,
-      })
-    );
-    result = outcome.result;
-    provider = outcome.provider;
-    modelName = outcome.model;
+    });
   } catch (err) {
     if (err instanceof NoLlmProviderError) {
       return NextResponse.json({ error: err.message }, { status: 503 });

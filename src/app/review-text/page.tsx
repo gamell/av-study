@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { NavHeader } from "@/components/nav-header";
 import {
   Card,
   CardContent,
@@ -28,6 +27,9 @@ import {
 } from "@/lib/data/study-texts";
 import { syncEngine } from "@/lib/data/sync";
 import { useDb } from "@/components/db-provider";
+import { ModelSelector } from "@/components/model-selector";
+import { DEFAULT_TEXT_MODEL, TEXT_MODELS } from "@/lib/ai/models";
+import { useModelPreference } from "@/lib/ai/use-model-preference";
 import type { StudyText } from "@/lib/data/types";
 
 interface FailedCard {
@@ -77,6 +79,10 @@ export default function ReviewTextPage() {
   const [savedTexts, setSavedTexts] = useState<SavedText[]>([]);
   const [expandedTextId, setExpandedTextId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [model, setModel] = useModelPreference(
+    "generate-text",
+    DEFAULT_TEXT_MODEL
+  );
   const { version } = useDb();
 
   useEffect(() => {
@@ -125,7 +131,7 @@ export default function ReviewTextPage() {
       const res = await fetch("/api/generate-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "auto" }),
+        body: JSON.stringify({ mode: "auto", model }),
       });
       const data = await res.json();
       if (data.error) {
@@ -168,6 +174,7 @@ export default function ReviewTextPage() {
         body: JSON.stringify({
           mode: "manual",
           cardIds: Array.from(selectedIds),
+          model,
         }),
       });
       const data = await res.json();
@@ -213,19 +220,27 @@ export default function ReviewTextPage() {
   };
 
   return (
-    <>
-      <NavHeader />
-      <main className="mx-auto max-w-5xl px-4 py-12">
+    <main className="mx-auto max-w-5xl px-4 py-12">
         <div className="flex items-center gap-3 mb-8">
           <FileText className="h-6 w-6 text-primary" />
           <h1 className="text-3xl font-bold">Study Texts</h1>
         </div>
 
-        <p className="text-muted-foreground mb-8 max-w-2xl">
+        <p className="text-muted-foreground mb-4 max-w-2xl">
           Generate review texts from your weakest cards. The AI creates flowing,
           conversational explanations with mnemonics — perfect for listening on
           Speechify while running.
         </p>
+
+        <div className="mb-8 flex justify-end">
+          <ModelSelector
+            models={TEXT_MODELS}
+            value={model}
+            onChange={setModel}
+            disabled={isGenerating}
+            aria-label="Study text model"
+          />
+        </div>
 
         {/* Generate Options */}
         <div className="grid md:grid-cols-2 gap-6 mb-10">
@@ -425,7 +440,6 @@ export default function ReviewTextPage() {
             </CardContent>
           </Card>
         )}
-      </main>
-    </>
+    </main>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { NavHeader } from "@/components/nav-header";
 import {
   Card,
   CardContent,
@@ -41,6 +40,9 @@ import { addNote, listNotes } from "@/lib/data/notes";
 import { syncEngine } from "@/lib/data/sync";
 import { useDb } from "@/components/db-provider";
 import { CardInfographic } from "@/components/card-infographic";
+import { ModelSelector } from "@/components/model-selector";
+import { DEFAULT_TEXT_MODEL, TEXT_MODELS } from "@/lib/ai/models";
+import { useModelPreference } from "@/lib/ai/use-model-preference";
 import type { CardNote as Note } from "@/lib/data/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -128,9 +130,7 @@ export default function DatabasePage() {
   };
 
   return (
-    <>
-      <NavHeader />
-      <main className="mx-auto max-w-5xl px-4 py-8">
+    <main className="mx-auto max-w-5xl px-4 py-8">
         <div className="flex items-center gap-3 mb-6">
           <Database className="h-6 w-6 text-primary" />
           <h1 className="text-3xl font-bold">Study Database</h1>
@@ -246,8 +246,7 @@ export default function DatabasePage() {
             </CardContent>
           )}
         </Card>
-      </main>
-    </>
+    </main>
   );
 }
 
@@ -638,6 +637,7 @@ function InlineChat({ cardId }: { cardId: number }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [model, setModel] = useModelPreference("chat", DEFAULT_TEXT_MODEL);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -685,7 +685,7 @@ function InlineChat({ cardId }: { cardId: number }) {
       const res = await fetch(`/api/cards/${cardId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg }),
+        body: JSON.stringify({ message: userMsg, model }),
       });
       const data = await res.json();
       const assistantIso = new Date().toISOString();
@@ -762,6 +762,15 @@ function InlineChat({ cardId }: { cardId: number }) {
           </div>
         )}
       </div>
+      <div className="flex justify-end">
+        <ModelSelector
+          models={TEXT_MODELS}
+          value={model}
+          onChange={setModel}
+          disabled={sending}
+          aria-label="Chat model"
+        />
+      </div>
       <div className="flex gap-2">
         <input
           type="text"
@@ -815,6 +824,10 @@ function GenerateSection({ onGenerated }: { onGenerated: () => void }) {
   const [deckType, setDeckType] = useState<"knowledge" | "oral">("knowledge");
   const [cardCount, setCardCount] = useState(10);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [model, setModel] = useModelPreference(
+    "generate-cards",
+    DEFAULT_TEXT_MODEL
+  );
   const [result, setResult] = useState<{
     cards: GeneratedCard[];
     provider: string;
@@ -834,7 +847,7 @@ function GenerateSection({ onGenerated }: { onGenerated: () => void }) {
       const res = await fetch("/api/generate-cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, deckType, count: cardCount }),
+        body: JSON.stringify({ topic, deckType, count: cardCount, model }),
       });
       const data = await res.json();
       if (data.error) {
@@ -882,7 +895,7 @@ function GenerateSection({ onGenerated }: { onGenerated: () => void }) {
         </div>
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-wrap gap-6">
         <div>
           <label className="text-sm font-medium mb-1.5 block">Deck Type</label>
           <div className="flex gap-2">
@@ -917,6 +930,16 @@ function GenerateSection({ onGenerated }: { onGenerated: () => void }) {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ModelSelector
+          models={TEXT_MODELS}
+          value={model}
+          onChange={setModel}
+          disabled={isGenerating}
+          aria-label="Card generation model"
+        />
       </div>
 
       <Button

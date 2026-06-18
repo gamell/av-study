@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import { addNote, insertNoteFromServer, listNotes } from "@/lib/data/notes";
 import { CardInfographic } from "@/components/card-infographic";
+import { ModelSelector } from "@/components/model-selector";
+import { DEFAULT_TEXT_MODEL, TEXT_MODELS } from "@/lib/ai/models";
+import { useModelPreference } from "@/lib/ai/use-model-preference";
 import type { CardNote as Note } from "@/lib/data/types";
 
 type ActionPanel = "notes" | "chat" | "infographic";
@@ -48,7 +51,7 @@ export function CardActions({
   return (
     <div className="w-full max-w-2xl mx-auto space-y-3">
       {/* Action buttons */}
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <Button
           variant={activePanel === "notes" ? "default" : "outline"}
           size="sm"
@@ -223,6 +226,7 @@ function ChatPanel({ cardId }: { cardId: number }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [model, setModel] = useModelPreference("chat", DEFAULT_TEXT_MODEL);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -267,7 +271,7 @@ function ChatPanel({ cardId }: { cardId: number }) {
       const res = await fetch(`/api/cards/${cardId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg }),
+        body: JSON.stringify({ message: userMsg, model }),
       });
       const data = await res.json();
       if (data.user) {
@@ -338,12 +342,20 @@ function ChatPanel({ cardId }: { cardId: number }) {
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
-      <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
         <MessageSquare className="h-4 w-4" />
         AI Chat
         <Badge variant="secondary" className="text-xs">
           Flight Instructor
         </Badge>
+        <ModelSelector
+          models={TEXT_MODELS}
+          value={model}
+          onChange={setModel}
+          disabled={sending}
+          aria-label="Chat model"
+          className="ml-auto"
+        />
       </div>
 
       <div ref={scrollRef} className="space-y-3 max-h-64 overflow-y-auto">

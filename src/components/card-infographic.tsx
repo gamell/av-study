@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { ImageIcon, Loader2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModelSelector } from "@/components/model-selector";
 import {
   buildDefaultInfographicPrompt,
   type InfographicPromptCard,
 } from "@/lib/infographic-generation";
+import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from "@/lib/ai/models";
+import { useModelPreference } from "@/lib/ai/use-model-preference";
 import {
   getInfographicForCard,
   insertInfographicFromServer,
@@ -34,6 +37,10 @@ export function CardInfographic({ card }: CardInfographicProps) {
   const [editingPrompt, setEditingPrompt] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [model, setModel] = useModelPreference(
+    "infographic",
+    DEFAULT_IMAGE_MODEL
+  );
 
   const defaultPrompt = useMemo(
     () => buildDefaultInfographicPrompt(card),
@@ -72,7 +79,7 @@ export function CardInfographic({ card }: CardInfographicProps) {
       const response = await fetch(`/api/cards/${card.id}/infographic`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: nextPrompt }),
+        body: JSON.stringify({ prompt: nextPrompt, model }),
       });
       const data = (await response.json()) as GenerateInfographicResponse;
       if (!response.ok || data.error || !data.infographic) {
@@ -100,9 +107,17 @@ export function CardInfographic({ card }: CardInfographicProps) {
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-4">
-      <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
         <ImageIcon className="h-4 w-4" />
         Infographic
+        <ModelSelector
+          models={IMAGE_MODELS}
+          value={model}
+          onChange={setModel}
+          disabled={generating}
+          aria-label="Infographic model"
+          className="ml-auto"
+        />
       </div>
 
       {imageSrc ? (

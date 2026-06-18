@@ -8,72 +8,95 @@ import {
   type CardInfographic,
 } from "@/lib/db/schema";
 import {
-  buildOpenAIImageRequest,
-  INFOGRAPHIC_IMAGE_MODEL,
-  INFOGRAPHIC_MIME_TYPE,
+  DEFAULT_INFOGRAPHIC_MIME_TYPE,
   INFOGRAPHIC_PROVIDER,
+  buildOpenRouterImageRequest,
   normalizePrompt,
+  parseImageDataUrl,
+  resolveInfographicModel,
 } from "@/lib/infographic-generation";
 
-const OPENAI_IMAGE_GENERATIONS_URL =
-  "https://api.openai.com/v1/images/generations";
+const OPENROUTER_CHAT_COMPLETIONS_URL =
+  "https://openrouter.ai/api/v1/chat/completions";
 
-interface OpenAIImageResponse {
-  data?: Array<{
-    b64_json?: string;
+interface OpenRouterImageMessage {
+  images?: Array<{
+    image_url?: {
+      url?: string;
+    };
+  }>;
+}
+
+interface OpenRouterChatResponse {
+  choices?: Array<{
+    message?: OpenRouterImageMessage;
   }>;
   error?: {
     message?: string;
   };
 }
 
-async function readOpenAIError(response: Response): Promise<string> {
+async function readOpenRouterError(response: Response): Promise<string> {
   try {
-    const data = (await response.json()) as OpenAIImageResponse;
+    const data = (await response.json()) as OpenRouterChatResponse;
     return (
-      data.error?.message || `OpenAI image generation failed (${response.status})`
+      data.error?.message ||
+      `OpenRouter image generation failed (${response.status})`
     );
   } catch {
-    return `OpenAI image generation failed (${response.status})`;
+    return `OpenRouter image generation failed (${response.status})`;
   }
 }
 
-async function fetchOpenAIImageBase64(
+interface GeneratedImage {
+  base64: string;
+  mimeType: string;
+}
+
+async function fetchOpenRouterImage(
+  model: string,
   prompt: string,
   apiKey: string
-): Promise<string | undefined> {
-  const openAiResponse = await fetch(OPENAI_IMAGE_GENERATIONS_URL, {
+): Promise<GeneratedImage | undefined> {
+  const response = await fetch(OPENROUTER_CHAT_COMPLETIONS_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(buildOpenAIImageRequest(prompt)),
+    body: JSON.stringify(buildOpenRouterImageRequest(model, prompt)),
   });
 
-  if (!openAiResponse.ok) {
-    throw new Error(await readOpenAIError(openAiResponse));
+  if (!response.ok) {
+    throw new Error(await readOpenRouterError(response));
   }
 
-  const data = (await openAiResponse.json()) as OpenAIImageResponse;
-  return data.data?.[0]?.b64_json;
+  const data = (await response.json()) as OpenRouterChatResponse;
+  const url = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  if (!url) return undefined;
+
+  const parsed = parseImageDataUrl(url);
+  if (!parsed) return undefined;
+  return { base64: parsed.base64, mimeType: parsed.mimeType };
 }
 
 async function saveInfographic(
   cardId: number,
   prompt: string,
-  imageBase64: string
+  model: string,
+  image: GeneratedImage
 ): Promise<CardInfographic> {
   const now = new Date().toISOString();
+  const mimeType = image.mimeType || DEFAULT_INFOGRAPHIC_MIME_TYPE;
   const [saved] = await db
     .insert(cardInfographics)
     .values({
       cardId,
       prompt,
-      imageBase64,
-      mimeType: INFOGRAPHIC_MIME_TYPE,
+      imageBase64: image.base64,
+      mimeType,
       provider: INFOGRAPHIC_PROVIDER,
-      model: INFOGRAPHIC_IMAGE_MODEL,
+      model,
       createdAt: now,
       updatedAt: now,
     })
@@ -81,10 +104,10 @@ async function saveInfographic(
       target: cardInfographics.cardId,
       set: {
         prompt,
-        imageBase64,
-        mimeType: INFOGRAPHIC_MIME_TYPE,
+        imageBase64: image.base64,
+        mimeType,
         provider: INFOGRAPHIC_PROVIDER,
-        model: INFOGRAPHIC_IMAGE_MODEL,
+        model,
         updatedAt: now,
       },
     })
@@ -113,33 +136,39 @@ export async function POST(
     return NextResponse.json({ error: "Card not found" }, { status: 404 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "No OpenAI API key configured. Set OPENAI_API_KEY." },
+      { error: "No LLM provider configured. Set OPENROUTER_API_KEY." },
       { status: 503 }
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as { prompt?: unknown };
+  const body = (await request.json().catch(() => ({}))) as {
+    prompt?: unknown;
+    model?: unknown;
+  };
   const prompt = normalizePrompt(body.prompt, card);
+  const model = resolveInfographicModel(
+    typeof body.model === "string" ? body.model : null
+  );
 
-  let imageBase64: string | undefined;
+  let image: GeneratedImage | undefined;
   try {
-    imageBase64 = await fetchOpenAIImageBase64(prompt, apiKey);
+    image = await fetchOpenRouterImage(model, prompt, apiKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  if (!imageBase64) {
+  if (!image) {
     return NextResponse.json(
-      { error: "OpenAI returned no image data." },
+      { error: "OpenRouter returned no image data." },
       { status: 502 }
     );
   }
 
-  const saved = await saveInfographic(cardId, prompt, imageBase64);
+  const saved = await saveInfographic(cardId, prompt, model, image);
 
   return NextResponse.json({
     infographic: saved,

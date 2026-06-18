@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Flashcard } from "@/components/flashcard";
 import { ReviewButtons } from "@/components/review-buttons";
 import { CardActions } from "@/components/card-actions";
-import { NavHeader } from "@/components/nav-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -222,36 +221,30 @@ export default function StudyPage({
 
   if (isLoading) {
     return (
-      <>
-        <NavHeader />
-        <main className="mx-auto max-w-5xl px-4 py-12">
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-muted-foreground">Loading cards...</div>
-          </div>
-        </main>
-      </>
+      <main className="mx-auto max-w-5xl px-4 py-12">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-muted-foreground">Loading cards...</div>
+        </div>
+      </main>
     );
   }
 
   if (dueCards.length === 0) {
     return (
-      <>
-        <NavHeader />
-        <main className="mx-auto max-w-5xl px-4 py-12">
-          <div className="flex flex-col items-center justify-center min-h-[400px] gap-6">
-            <CheckCircle2 className="h-16 w-16 text-green-500" />
-            <h2 className="text-2xl font-bold">All caught up!</h2>
-            <p className="text-muted-foreground text-center max-w-md">
-              No {deckLabel} cards are due for review right now. Come back later
-              or start a new study session when cards become due.
-            </p>
-            <Button onClick={() => router.push("/")} variant="outline">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Home
-            </Button>
-          </div>
-        </main>
-      </>
+      <main className="mx-auto max-w-5xl px-4 py-12">
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-6">
+          <CheckCircle2 className="h-16 w-16 text-green-500" />
+          <h2 className="text-2xl font-bold">All caught up!</h2>
+          <p className="text-muted-foreground text-center max-w-md">
+            No {deckLabel} cards are due for review right now. Come back later
+            or start a new study session when cards become due.
+          </p>
+          <Button onClick={() => router.push("/")} variant="outline">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Home
+          </Button>
+        </div>
+      </main>
     );
   }
 
@@ -262,12 +255,10 @@ export default function StudyPage({
         : 0;
 
     return (
-      <>
-        <NavHeader />
-        <main className="mx-auto max-w-5xl px-4 py-12">
-          <div className="flex flex-col items-center gap-8">
-            <CheckCircle2 className="h-16 w-16 text-green-500" />
-            <h2 className="text-2xl font-bold">Session Complete!</h2>
+      <main className="mx-auto max-w-5xl px-4 py-12">
+        <div className="flex flex-col items-center gap-8">
+          <CheckCircle2 className="h-16 w-16 text-green-500" />
+          <h2 className="text-2xl font-bold">Session Complete!</h2>
 
             <div className="grid grid-cols-3 gap-6 w-full max-w-lg">
               <Card>
@@ -303,17 +294,14 @@ export default function StudyPage({
               </Button>
             </div>
           </div>
-        </main>
-      </>
+      </main>
     );
   }
 
   const currentCard = dueCards[currentIndex];
 
   return (
-    <>
-      <NavHeader />
-      <main className="mx-auto max-w-5xl px-4 py-8">
+    <main className="mx-auto max-w-5xl px-4 py-8">
         {/* Session header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
@@ -389,7 +377,6 @@ export default function StudyPage({
             />
           </div>
         )}
-      </main>
-    </>
+    </main>
   );
 }

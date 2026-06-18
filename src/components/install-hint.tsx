@@ -76,7 +76,7 @@ export function InstallHint() {
   if (mode === "hidden") return null;
 
   return (
-    <div className="sticky top-0 z-40 w-full border-b bg-primary/5 backdrop-blur supports-[backdrop-filter]:bg-primary/10">
+    <div className="w-full border-b bg-primary/5 backdrop-blur supports-[backdrop-filter]:bg-primary/10">
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2.5 text-sm">
         <Download className="h-4 w-4 shrink-0 text-primary" />
         {mode === "ios-safari" ? (

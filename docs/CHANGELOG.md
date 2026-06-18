@@ -2,6 +2,25 @@
 
 Agents MUST update this file whenever they push code to `main`.
 
+## 2026-06-17 - Unified OpenRouter AI, Mobile UI, Sync Hardening
+
+- Summary: Replaced the multi-provider (Anthropic/OpenAI/Google) LLM fallback
+  chain and the direct OpenAI Images infographic call with a single OpenRouter
+  integration powered by one `OPENROUTER_API_KEY`. Added a per-feature model
+  picker (cards, study texts, chat, infographics) persisted in the browser.
+  Infographics now use OpenRouter image-capable chat models (default
+  `openai/gpt-5.4-image-2`). Also audited/hardened offline progress sync and
+  fixed several mobile-UI issues for iPhone/iPad.
+- Data/schema: None (reused `provider`/`model` columns; no migration).
+- Verification: `bun run build` passes (TypeScript clean, 20 routes). 16/16
+  non-sync tests pass via per-file `bun test`. The sync suite
+  (`sync.test.ts`) still hangs in its `afterEach` teardown under
+  `fake-indexeddb` — pre-existing, see `docs/LEARNINGS.md`; each sync test
+  passes individually with `-t`.
+- Notes: All AI features are online-only and need `OPENROUTER_API_KEY`. The old
+  `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` /
+  `LLM_PROVIDER` env vars are no longer used.
+
 ## 2026-05-02 - Offline Sync And Infographics
 
 - Summary: Improved offline startup/sync behavior, added randomized study mode

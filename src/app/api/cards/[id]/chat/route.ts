@@ -3,7 +3,8 @@ import { generateText } from "ai";
 import {
   FACTUALITY_DIRECTIVE,
   NoLlmProviderError,
-  tryWithFallback,
+  getTextModel,
+  resolveTextModel,
 } from "@/lib/llm";
 import { db } from "@/lib/db";
 import { cards, cardNotes } from "@/lib/db/schema";
@@ -17,7 +18,7 @@ export async function POST(
   await ensureDatabase();
   const { id } = await params;
   const cardId = parseInt(id, 10);
-  const { message } = await request.json();
+  const { message, model: requestedModel } = await request.json();
 
   if (!message?.trim()) {
     return NextResponse.json(
@@ -64,15 +65,13 @@ export async function POST(
     )
     .join("\n\n");
 
+  const provider = "openrouter";
+  const modelName = resolveTextModel(requestedModel);
   let result;
-  let provider: string;
-  let modelName: string;
   try {
-    const outcome = await tryWithFallback((model, providerOptions) =>
-      generateText({
-        model,
-        providerOptions,
-        prompt: `${FACTUALITY_DIRECTIVE}
+    result = await generateText({
+      model: getTextModel(modelName),
+      prompt: `${FACTUALITY_DIRECTIVE}
 
 You are an experienced FAA-certified flight instructor helping a student pilot study for their private pilot certificate. You are discussing a specific flashcard.
 
@@ -85,11 +84,7 @@ Flashcard context:
 ${chatHistory ? `Previous conversation:\n${chatHistory}\n\n` : ""}The student asks: ${message.trim()}
 
 Respond as a knowledgeable, encouraging flight instructor. Be thorough but concise. Cite specific FAA publications, regulations, or handbook chapters only when you are confident they are correct and current. If the student seems confused, try a different angle or analogy. If asked about something outside verifiable FAA material, say so clearly rather than guessing.`,
-      })
-    );
-    result = outcome.result;
-    provider = outcome.provider;
-    modelName = outcome.model;
+    });
   } catch (err) {
     if (err instanceof NoLlmProviderError) {
       return NextResponse.json(

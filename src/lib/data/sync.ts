@@ -10,6 +10,16 @@ import type {
 
 type SyncListener = (state: SyncState) => void;
 
+/**
+ * Detach a timer from the event loop's "keep alive" set when the runtime
+ * supports it (Node/Bun). In the browser timer ids are plain numbers without
+ * `.unref`, so this is a no-op there. Prevents background timers from keeping
+ * test/CI processes (or a torn-down engine) alive.
+ */
+function unref(timer: ReturnType<typeof setTimeout>): void {
+  (timer as unknown as { unref?: () => void }).unref?.();
+}
+
 const INITIAL_SYNC_TIMEOUT_MS = 4000;
 const BACKOFF_LADDER_MS = [1_000, 5_000, 15_000, 60_000, 300_000];
 const PERIODIC_PULL_MS = 60_000;
@@ -81,6 +91,7 @@ class SyncEngine {
         () => this.opportunisticPullFlush(),
         PERIODIC_PULL_MS
       );
+      unref(this.periodicTimer);
     }
 
     await this.refreshPendingCount();
@@ -90,11 +101,18 @@ class SyncEngine {
     }
 
     // Always attempt the initial pull regardless of `navigator.onLine` — Safari
-    // can lie about it. The pull's own catch will surface a real failure.
+    // can lie about it. The pull's own catch will surface a real failure. The
+    // race timeout is cleared so it never lingers as an open handle (which
+    // otherwise keeps test/CI processes alive).
+    let initialTimer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       this.pullSnapshot().catch(() => undefined),
-      new Promise((resolve) => setTimeout(resolve, INITIAL_SYNC_TIMEOUT_MS)),
+      new Promise<void>((resolve) => {
+        initialTimer = setTimeout(resolve, INITIAL_SYNC_TIMEOUT_MS);
+        unref(initialTimer);
+      }),
     ]);
+    if (initialTimer) clearTimeout(initialTimer);
     await this.flush().catch(() => undefined);
 
     if (this.state.status === "initializing" || this.state.status === "pulling") {
@@ -150,7 +168,10 @@ class SyncEngine {
    * for client-created rows that haven't been flushed yet (negative temp ids).
    */
   async pullSnapshot(): Promise<void> {
-    if (this.pulling) return;
+    // Never reconcile a snapshot while a flush is in flight: a snapshot fetched
+    // just before a queued write lands on the server would otherwise clobber
+    // the confirmed local value until the next pull (a lost-update flicker).
+    if (this.pulling || this.flushing) return;
     this.pulling = true;
     this.emit({ status: "pulling" });
     try {
@@ -252,6 +273,11 @@ class SyncEngine {
     } finally {
       this.pulling = false;
       await this.refreshPendingCount();
+      // A flush deferred because this pull was running can now proceed.
+      if (this.flushAgainAfterCurrent) {
+        this.flushAgainAfterCurrent = false;
+        this.scheduleFlush();
+      }
     }
   }
 
@@ -296,6 +322,12 @@ class SyncEngine {
    */
   async flush(): Promise<void> {
     if (this.flushing) return;
+    if (this.pulling) {
+      // A pull is reconciling right now; let it finish, then flush so we don't
+      // POST against state the pull is mid-way through mirroring.
+      this.flushAgainAfterCurrent = true;
+      return;
+    }
     this.flushing = true;
     this.emit({ status: "flushing" });
     try {
@@ -489,6 +521,7 @@ class SyncEngine {
       this.retryTimer = null;
       this.opportunisticPullFlush();
     }, delay);
+    unref(this.retryTimer);
   }
 
   /** Force an immediate pull + flush (used for pull-to-refresh / manual sync). */
@@ -520,6 +553,7 @@ class SyncEngine {
         console.error("[sync] flush failed:", err)
       );
     }, 75);
+    unref(this.flushSoonHandle);
   }
 }
 

@@ -9,7 +9,7 @@ A self-hosted flashcard study app for the FAA Private Pilot knowledge test and c
 - **500+ Seed Cards**: Pre-loaded flashcards covering all ACS areas of operation
 - **Offline-First PWA**: Install to your phone's home screen; cards, progress, notes, and search all work in Airplane Mode. Reviews queue locally and sync back to the server the next time you're online.
 - **Multi-Device Sync**: Server SQLite is the source of truth; laptop and phone stay in sync automatically (SM-2 review scores are additive so nothing is lost).
-- **AI-Powered Extensions**: Generate additional cards, study texts, per-card infographics, or chat responses using OpenAI, Anthropic, or Google Gemini (online only)
+- **AI-Powered Extensions**: Generate additional cards, study texts, per-card infographics, or chat responses through a single OpenRouter key, with a per-feature model picker (online only)
 - **Study Text Generator**: Creates conversational review texts from failed cards (for Speechify/audio)
 - **Progress Dashboard**: Track mastery by category with weak area highlighting
 - **Dark Mode**: System-aware with manual toggle
@@ -33,11 +33,11 @@ cd pilot-study
 
 # 2. (Optional) Enable AI features.
 #    Skip this entirely if you only want the offline flashcards — the study,
-#    review, progress, notes, and search flows work without any keys. The
-#    "Generate cards", "Generate study text", and "AI chat" buttons simply
-#    show a clear error when tapped if no key is set.
+#    review, progress, notes, and search flows work without any key. The
+#    "Generate cards", "Generate study text", "AI chat", and "Infographic"
+#    buttons simply show a clear error when tapped if no key is set.
 cp .env.example .env
-${EDITOR:-nano} .env          # set LLM_PROVIDER and the matching API key
+${EDITOR:-nano} .env          # set OPENROUTER_API_KEY
 
 # 3. Build the image and start the container (detached).
 docker compose up -d --build
@@ -176,31 +176,29 @@ Generating cards / study texts / infographics and the in-card AI chat require ne
 - Server SQLite stays the source of truth. The client keeps a mirror in IndexedDB via Dexie.
 - Page reads always hit IndexedDB → instant, offline-capable.
 - Writes (reviews, session updates, notes, card edits) are applied to IndexedDB immediately and appended to a durable queue; a small sync engine drains the queue against the existing `/api/`* endpoints when online.
-- On boot / reconnect / tab focus / every 60 s, the client pulls a fresh `GET /api/sync/snapshot` and merges it into IndexedDB (rows with pending local ops are preserved until flush completes).
-- Two devices reviewing the same card offline simultaneously is safe: SM-2 is applied twice on the server, so both reviews count. All other entities fall back to last-write-wins by `updated_at`.
+- On boot / reconnect / tab focus / every 60 s, the client pulls a fresh `GET /api/sync/snapshot` and reconciles it into IndexedDB. Conflict policy is **server-authoritative**: each pulled row overwrites the local copy unless that row is "locked" by a still-pending local op (in which case the local edit wins until it flushes). The pull and the queue flush are mutually exclusive, so a snapshot taken mid-flush can't clobber a just-confirmed local write.
+- Multiple offline ratings of the same card collapse to a single pending review op keeping the **most recent** rating (last-write-wins), so a fresh lapse isn't masked by an earlier easy rating.
+- Two devices reviewing the same card offline is safe: each device flushes its latest rating and the server applies SM-2 per op in order, so both reviews count.
 
-## AI features & provider fallback
+## AI features (OpenRouter)
 
-The online-only AI features — "Generate cards", "Generate study text", "Generate infographic", and in-card "AI chat" — run against whichever providers you've configured. Text/chat prompts are prefixed with a strict factuality directive that forbids inventing regulations, ACS codes, or handbook references and tells the model to hedge when uncertain (FAA-exam content has to be right). Infographics use `OPENAI_API_KEY` and the OpenAI image model `gpt-image-2`.
+The online-only AI features — "Generate cards", "Generate study text", in-card "AI chat", and card "Infographics" — all run through a **single OpenRouter API key** (`OPENROUTER_API_KEY`). OpenRouter is a unified gateway, so one key gives access to models from OpenAI, Anthropic, Google, and others. Text/chat prompts are prefixed with a strict factuality directive that forbids inventing regulations, ACS codes, or handbook references and tells the model to hedge when uncertain (FAA-exam content has to be right).
 
-Configure **any one** of these keys to turn AI features on; configure more than one to get automatic fallback:
+Set one key to turn all AI features on:
 
-- `ANTHROPIC_API_KEY` — Anthropic (primary `claude-opus-4-6` with adaptive thinking at `effort: "max"`, fallback `claude-opus-4-5-20251101`)
-- `OPENAI_API_KEY` — OpenAI (primary `gpt-5.5`, fallback `gpt-5.4`; also required for `gpt-image-2` infographics)
-- `GOOGLE_GENERATIVE_AI_API_KEY` — Google (primary `gemini-3.1-pro-preview`, fallback `gemini-2.5-pro`)
+- `OPENROUTER_API_KEY` — get one at [openrouter.ai/keys](https://openrouter.ai/keys).
 
-### Priority chain
+### Choosing models
 
-Each provider has two model slots — primary and fallback — so the call falls through to a per-provider backup before ever crossing over to a different provider. If everything in one provider's pair fails, the next provider's pair is tried.
+Each AI interaction has its own model dropdown in the UI. Your choice is remembered per feature (cards, study texts, chat, infographics are independent) in the browser, so you can use a cheap model for chat and a stronger one for card generation, for example. The selectable models are curated in [`src/lib/ai/models.ts`](src/lib/ai/models.ts).
 
-1. Claude Opus 4.6 (max thinking)
-2. Claude Opus 4.5
-3. GPT-5.5
-4. GPT-5.4
-5. Gemini 3.1 Pro (preview)
-6. Gemini 2.5 Pro (stable)
+Images use OpenRouter's image-capable chat models (default `openai/gpt-5.4-image-2`), which return a PNG that's stored with the rest of your synced content for offline use.
 
-Set `LLM_PROVIDER=anthropic|openai|google` to move that provider's attempts to the front of the chain; the rest stay in as fallbacks. Every model id is env-overridable — `ANTHROPIC_MODEL` / `ANTHROPIC_MODEL_FALLBACK`, `OPENAI_MODEL` / `OPENAI_MODEL_FALLBACK`, `GOOGLE_MODEL` / `GOOGLE_MODEL_FALLBACK` — so a new release or deprecation never needs a code change.
+Optional env overrides set the server-side default model used when the UI doesn't send one:
+
+- `OPENROUTER_MODEL` — default text model (e.g. `openai/gpt-5.4`).
+- `OPENROUTER_IMAGE_MODEL` — default image model (e.g. `openai/gpt-5.4-image-2`).
+- `OPENROUTER_SITE_URL` — optional, sent as the `HTTP-Referer` for OpenRouter attribution.
 
 ## Tech Stack
 
@@ -209,7 +207,7 @@ Set `LLM_PROVIDER=anthropic|openai|google` to move that provider's attempts to t
 - **Database**: SQLite (Drizzle ORM) server-side, IndexedDB (Dexie) client-side
 - **PWA**: Serwist service worker + web manifest
 - **UI**: Tailwind CSS v4, shadcn/ui components
-- **LLM**: Vercel AI SDK with priority chain (Anthropic, OpenAI, Google Gemini) — online only
+- **LLM**: Vercel AI SDK via OpenRouter (single key, per-feature model selection; text + image) — online only
 
 ## Content Sources
 

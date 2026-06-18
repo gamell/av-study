@@ -8,7 +8,7 @@ export function OfflineBanner() {
   if (state.online) return null;
 
   return (
-    <div className="sticky top-0 z-50 w-full bg-muted/80 backdrop-blur supports-[backdrop-filter]:bg-muted/60">
+    <div className="w-full bg-muted/80 backdrop-blur supports-[backdrop-filter]:bg-muted/60">
       <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
         <WifiOff className="h-3.5 w-3.5" />
         <span>

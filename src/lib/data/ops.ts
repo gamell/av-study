@@ -14,8 +14,17 @@ export async function enqueueOp(op: PendingOp): Promise<number> {
 }
 
 /**
- * Review ops represent a card's sync-period scheduling result. When multiple
- * offline ratings exist for one card, keep the strongest pending rating.
+ * Coalesce repeated offline ratings of the same card into one pending review
+ * op, keeping the MOST RECENT rating (last-write-wins).
+ *
+ * Rationale: the local IndexedDB progress already reflects each rating applied
+ * in sequence, and the server applies SM-2 once per flushed op before the next
+ * snapshot reconciles local progress back to the server's result. Keeping the
+ * latest rating means the user's most recent self-assessment wins; the prior
+ * "keep the strongest rating" behavior could hide a fresh lapse (you forgot a
+ * card you'd earlier marked easy), which is the wrong spaced-repetition signal.
+ * Cross-device additivity is preserved: each device still flushes its own
+ * latest rating, and the server applies them in order.
  */
 export async function enqueueReviewOp(op: ReviewOpInput): Promise<number> {
   const db = getClientDb();
@@ -31,15 +40,15 @@ export async function enqueueReviewOp(op: ReviewOpInput): Promise<number> {
     return enqueueOp({ kind: "review", ...op });
   }
 
-  const strongestQuality = Math.max(keeper.quality, op.quality);
   const duplicateIds = duplicates
     .map((pending) => pending.localId)
     .filter((localId): localId is number => localId != null);
 
   await db.transaction("rw", db.pendingOps, async () => {
-    if (keeper.localId != null && strongestQuality !== keeper.quality) {
+    if (keeper.localId != null) {
       await db.pendingOps.update(keeper.localId, {
-        quality: strongestQuality,
+        quality: op.quality,
+        createdAt: op.createdAt,
         attempts: 0,
         lastError: undefined,
       } as Partial<PendingOp>);

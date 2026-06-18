@@ -18,9 +18,7 @@
     "bun": ">=1.1.0"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.0",
-    "@ai-sdk/google": "^3.0.0",
-    "@ai-sdk/openai": "^3.0.0",
+    "@openrouter/ai-sdk-provider": "^2.9.1",
     "@serwist/next": "^9.5.7",
     "ai": "^6.0.0",
     "class-variance-authority": "^0.7.1",

@@ -3,7 +3,8 @@ import { generateText } from "ai";
 import {
   FACTUALITY_DIRECTIVE,
   NoLlmProviderError,
-  tryWithFallback,
+  getTextModel,
+  resolveTextModel,
 } from "@/lib/llm";
 import { db } from "@/lib/db";
 import { cards, cardProgress, studyTexts } from "@/lib/db/schema";
@@ -13,7 +14,7 @@ import { ensureDatabase } from "@/lib/db/ensure-seeded";
 export async function POST(request: NextRequest) {
   await ensureDatabase();
 
-  const { cardIds, mode } = await request.json();
+  const { cardIds, mode, model: requestedModel } = await request.json();
 
   let selectedCards;
 
@@ -68,15 +69,13 @@ export async function POST(request: NextRequest) {
     )
     .join("\n\n");
 
+  const provider = "openrouter";
+  const modelName = resolveTextModel(requestedModel);
   let result;
-  let provider: string;
-  let modelName: string;
   try {
-    const outcome = await tryWithFallback((model, providerOptions) =>
-      generateText({
-        model,
-        providerOptions,
-        prompt: `${FACTUALITY_DIRECTIVE}
+    result = await generateText({
+      model: getTextModel(modelName),
+      prompt: `${FACTUALITY_DIRECTIVE}
 
 You are an experienced flight instructor creating a study guide for a student pilot preparing for their private pilot certificate. The student has been struggling with the following concepts. Write a clear, engaging study text that:
 
@@ -93,11 +92,7 @@ Concepts the student needs to review:
 ${conceptList}
 
 Write the study text now. Make it thorough but engaging -- approximately 200-400 words per concept. If you are not confident about a specific fact or reference, hedge it ("verify in the current PHAK" etc.) rather than asserting it.`,
-      })
-    );
-    result = outcome.result;
-    provider = outcome.provider;
-    modelName = outcome.model;
+    });
   } catch (err) {
     if (err instanceof NoLlmProviderError) {
       return NextResponse.json({ error: err.message }, { status: 503 });

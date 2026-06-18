@@ -89,9 +89,11 @@ export async function deleteCard(cardId: number): Promise<void> {
     db.cards,
     db.cardProgress,
     db.cardNotes,
+    db.cardInfographics,
     async () => {
       await db.cardNotes.where("cardId").equals(cardId).delete();
       await db.cardProgress.where("cardId").equals(cardId).delete();
+      await db.cardInfographics.where("cardId").equals(cardId).delete();
       await db.cards.delete(cardId);
     }
   );

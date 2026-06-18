@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
 import {
   buildDefaultInfographicPrompt,
-  buildOpenAIImageRequest,
+  buildOpenRouterImageRequest,
   normalizePrompt,
+  parseImageDataUrl,
+  resolveInfographicModel,
 } from "../infographic-generation";
+import { DEFAULT_IMAGE_MODEL } from "../ai/models";
 
 const card = {
   question: "What causes a wing to stall?",
@@ -32,9 +35,27 @@ test("normalizes a custom prompt or falls back to the default prompt", () => {
   expect(normalizePrompt("", card)).toBe(buildDefaultInfographicPrompt(card));
 });
 
-test("builds the OpenAI image generation request payload", () => {
-  expect(buildOpenAIImageRequest("study image")).toEqual({
-    model: "gpt-image-2",
-    prompt: "study image",
+test("builds the OpenRouter image generation request payload", () => {
+  expect(
+    buildOpenRouterImageRequest("openai/gpt-5.4-image-2", "study image")
+  ).toEqual({
+    model: "openai/gpt-5.4-image-2",
+    modalities: ["image", "text"],
+    messages: [{ role: "user", content: "study image" }],
   });
+});
+
+test("resolves the image model against the allowlist with a default fallback", () => {
+  expect(resolveInfographicModel("openai/gpt-5.4-image-2")).toBe(
+    "openai/gpt-5.4-image-2"
+  );
+  expect(resolveInfographicModel("not-a-real-model")).toBe(DEFAULT_IMAGE_MODEL);
+  expect(resolveInfographicModel(null)).toBe(DEFAULT_IMAGE_MODEL);
+});
+
+test("parses a base64 image data URL", () => {
+  expect(
+    parseImageDataUrl("data:image/png;base64,aW1n")
+  ).toEqual({ mimeType: "image/png", base64: "aW1n" });
+  expect(parseImageDataUrl("https://example.com/x.png")).toBeNull();
 });

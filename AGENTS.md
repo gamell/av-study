@@ -18,7 +18,7 @@ Agents MUST keep documentation current as part of every code change. If behavior
 - `src/components/` contains shared client UI, including the study card actions, sync status, PWA helpers, and shadcn-style primitives.
 - `src/lib/db/` is the server-side Drizzle/SQLite layer. `schema.ts` defines tables, `ensure-seeded.ts` runs migrations and initial deck seeding, and `index.ts` opens `data/pilot-study.db`.
 - `src/lib/data/` is the browser-side Dexie mirror plus offline mutation queue. UI reads from IndexedDB first; writes update IndexedDB and enqueue `pendingOps` where offline mutation is supported.
-- `src/lib/data/sync.ts` pulls `GET /api/sync/snapshot` into Dexie and flushes queued ops back to API routes.
+- `src/lib/data/sync.ts` pulls `GET /api/sync/snapshot` into Dexie and flushes queued ops back to API routes. Conflict policy is server-authoritative: pulled rows overwrite local rows unless locked by a pending op. Pull and flush are mutually exclusive (a flush requested during a pull is deferred until the pull finishes) to avoid lost-update flicker. Background timers are `unref()`'d so they don't keep Node/CI processes alive. Repeated review ops per card coalesce to the most recent rating (last-write-wins).
 - `src/app/sw.ts` is the Serwist service worker. It caches app shell/documents; `/api/*` remains network-only because data reads come from IndexedDB.
 - `drizzle/` contains generated SQL migrations and Drizzle metadata snapshots.
 - `data/` contains local SQLite files. Treat these as runtime state, not source code.
@@ -30,7 +30,7 @@ Agents MUST keep documentation current as part of every code change. If behavior
 - Database: SQLite via Drizzle ORM on the server, Dexie/IndexedDB in the browser
 - PWA/offline: Serwist service worker plus Dexie snapshot sync
 - Styling/UI: Tailwind CSS v4, shadcn-style primitives, `lucide-react`
-- AI: Vercel AI SDK for text/object generation with Anthropic/OpenAI/Google fallback; OpenAI Images for `gpt-image-2` infographics
+- AI: Vercel AI SDK via OpenRouter (`@openrouter/ai-sdk-provider`, single `OPENROUTER_API_KEY`) for text/object generation; OpenRouter image-capable chat models (default `openai/gpt-5.4-image-2`, `modalities:["image","text"]`) for infographics. Models are curated in `src/lib/ai/models.ts` and chosen per feature in the UI.
 - Tests: `bun test`, with co-located `__tests__` folders
 
 ## Useful Commands
@@ -47,7 +47,7 @@ Agents MUST keep documentation current as part of every code change. If behavior
 
 - `.secrets` is gitignored and used for local development secrets.
 - `.env.example` documents supported variables.
-- AI features work without all providers configured, but image infographics require `OPENAI_API_KEY`.
+- All AI features (text + image) require a single `OPENROUTER_API_KEY`; without it those endpoints return a 503 and the rest of the app works normally. Optional `OPENROUTER_MODEL` / `OPENROUTER_IMAGE_MODEL` override the server-side default models; `OPENROUTER_SITE_URL` sets the attribution referer.
 - Docker Compose reads `.env` for production-style deployments.
 
 ## Development Notes

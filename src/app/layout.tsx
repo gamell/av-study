@@ -4,6 +4,8 @@ import { DbProvider } from "@/components/db-provider";
 import { OfflineBanner } from "@/components/offline-banner";
 import { OfflineRouteWarmer } from "@/components/offline-route-warmer";
 import { InstallHint } from "@/components/install-hint";
+import { NavHeader } from "@/components/nav-header";
+import { MobileNav } from "@/components/mobile-nav";
 import "./globals.css";
 
 const APP_NAME = "Pilot Study";
@@ -46,7 +48,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  userScalable: false,
+  // Allow pinch-zoom for accessibility; the previous `userScalable: false`
+  // blocked zooming on the (often small) FAA reference text.
 };
 
 export default function RootLayout({
@@ -64,10 +67,19 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <DbProvider>
-            <OfflineBanner />
-            <InstallHint />
+            {/*
+              Single sticky top stack so the offline banner, install hint, and
+              nav header never overlap (they were all `sticky top-0`). `pt-safe`
+              fills the notch / Dynamic Island area with the app background.
+            */}
+            <div className="sticky top-0 z-50 bg-background pt-safe px-safe">
+              <OfflineBanner />
+              <InstallHint />
+              <NavHeader />
+            </div>
             <OfflineRouteWarmer />
-            {children}
+            <div className="bottom-nav-gap px-safe sm:pb-0">{children}</div>
+            <MobileNav />
           </DbProvider>
         </ThemeProvider>
       </body>

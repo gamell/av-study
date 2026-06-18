@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { NavHeader } from "@/components/nav-header";
 import {
   Card,
   CardContent,
@@ -49,9 +48,7 @@ export default function HomePage() {
   const oralDue = progress?.dueByDeck?.oral || 0;
 
   return (
-    <>
-      <NavHeader />
-      <main className="mx-auto max-w-5xl px-4 py-12">
+    <main className="mx-auto max-w-5xl px-4 py-12">
         {/* Hero */}
         <div className="mb-12 text-center">
           <div className="flex justify-center mb-4">
@@ -167,7 +164,6 @@ export default function HomePage() {
             </Card>
           </Link>
         </div>
-      </main>
-    </>
+    </main>
   );
 }

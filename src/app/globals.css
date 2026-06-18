@@ -75,8 +75,25 @@
   * {
     @apply border-border;
   }
+  html {
+    /* Keep text legible without iOS silently rescaling fonts on rotate. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /*
+   * iOS Safari zooms the viewport when focusing an input whose font-size is
+   * below 16px. The app uses `text-sm` (14px) for compact form controls, so
+   * pin the effective font-size to 16px on touch devices to stop the zoom.
+   */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
   }
 }
 
@@ -89,5 +106,20 @@
   }
   .backface-hidden {
     backface-visibility: hidden;
+  }
+  /* Safe-area helpers for notched / Dynamic Island devices (viewport-fit=cover). */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .px-safe {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .bottom-nav-gap {
+    /* Reserve space for the fixed mobile tab bar + the home-indicator inset. */
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
   }
 }

@@ -14,7 +14,7 @@ afterEach(async () => {
   await db.pendingOps.clear();
 });
 
-test("coalesces weaker then stronger review ops for the same card", async () => {
+test("coalesces repeated ratings for a card, keeping the most recent (ascending)", async () => {
   const { enqueueReviewOp, listPendingOps } = await import("../ops");
 
   await enqueueReviewOp({
@@ -36,10 +36,11 @@ test("coalesces weaker then stronger review ops for the same card", async () => 
     kind: "review",
     cardId: 42,
     quality: 5,
+    createdAt: "2026-05-02T10:01:00.000Z",
   });
 });
 
-test("keeps stronger review op when a weaker rating is queued later", async () => {
+test("keeps the most recent rating even when it is weaker (last-write-wins)", async () => {
   const { enqueueReviewOp, listPendingOps } = await import("../ops");
 
   await enqueueReviewOp({
@@ -60,7 +61,8 @@ test("keeps stronger review op when a weaker rating is queued later", async () =
   expect(ops[0]).toMatchObject({
     kind: "review",
     cardId: 42,
-    quality: 5,
+    quality: 2,
+    createdAt: "2026-05-02T10:01:00.000Z",
   });
 });
 
